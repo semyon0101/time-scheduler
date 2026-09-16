@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project specific
+node_modules/
+dist/
+scheduler.db
+.pids
+logs/
+

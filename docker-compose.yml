@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Сервис 1: Клиентский интерфейс диспетчера (React + Vite, без Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: beeline_scheduler_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Сервис 2: Основной бэкенд и оркестратор данных (FastAPI + SQLite)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: beeline_scheduler_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ALGORITHM_SERVICE_URL=http://algorithm:8001
+      - DATABASE_URL=sqlite:////app/data/scheduler.db
+    volumes:
+      - backend_db_data:/app/data
+    depends_on:
+      - algorithm
+    restart: unless-stopped
+
+  # Сервис 3: Вычислительный сервис оптимизации и ИИ (FastAPI Stateless)
+  algorithm:
+    build:
+      context: ./algorithm
+      dockerfile: Dockerfile
+    container_name: beeline_scheduler_algorithm
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+
+volumes:
+  backend_db_data:
