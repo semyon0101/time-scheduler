@@ -357,7 +357,7 @@ export const EngineerDrawer: React.FC<EngineerDrawerProps> = ({
                   <div className="flex items-center justify-between text-[10px] text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-800">
                     <span className="flex items-center gap-1 text-emerald-400 font-semibold">
                       <Database className="w-3 h-3 text-blue-400" />
-                      {explanation.cached ? 'Ответ из кэша SQLite' : 'Свежая генерация нейросетью'}
+                      {explanation.cached ? 'Ответ из кэша PostgreSQL' : 'Свежая генерация нейросетью'}
                     </span>
                     <button onClick={() => setIsExpOpen(false)} className="text-slate-400 hover:text-white">
                       <X className="w-3 h-3" />

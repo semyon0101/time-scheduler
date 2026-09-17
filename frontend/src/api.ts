@@ -4,7 +4,7 @@ const getBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
-  return '/api';
+  return '/api/v1';
 };
 
 export function getDispatcherId(): string {
@@ -74,9 +74,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   const primaryBase = getBaseUrl();
   const candidateBases = [
     primaryBase,
-    '/api',
-    'http://127.0.0.1:8000/api',
-    'http://localhost:8000/api'
+    '/api/v1',
+    'http://127.0.0.1:8000/api/v1',
+    'http://localhost:8000/api/v1'
   ];
 
   let lastError: any = null;

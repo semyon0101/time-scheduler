@@ -1,0 +1,118 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Ruff Code Quality & Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Ruff
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff>=0.5.0
+
+      - name: Run Ruff Lint Check
+        run: |
+          ruff check .
+
+      - name: Run Ruff Format Check
+        run: |
+          ruff format --check .
+
+  test:
+    name: Backend Tests & VRPTW Engine (PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: scheduler_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[dev]"
+
+      - name: Run Pytest Suite (PostgreSQL Backend)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/scheduler_test
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: scheduler_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          BACKEND_PORT: 8000
+        run: |
+          pytest -ra -v
+
+      - name: Run Standalone Offline VRPTW & XAI CLI Test
+        run: |
+          python test_cli.py --preset vostok
+          python test_cli.py --preset yugcenter
+          python test_cli.py --preset yugovostok
+
+      - name: Run Comprehensive End-to-End Scenario (PostgreSQL)
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/scheduler_test
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: scheduler_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          BACKEND_PORT: 8000
+        run: |
+          python test_e2e.py
+
+  frontend:
+    name: Frontend Build & Typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      - name: Build Frontend (TypeScript + Vite)
+        run: npm run build

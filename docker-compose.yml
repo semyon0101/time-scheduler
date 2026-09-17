@@ -1,46 +1,47 @@
-version: '3.8'
-
 services:
-  # Сервис 1: Клиентский интерфейс диспетчера (React + Vite, без Nginx)
+  # База данных: PostgreSQL
+  db:
+    image: postgres:16-alpine
+    container_name: beeline_scheduler_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Бэкенд: FastAPI + PostgreSQL + встроенный VRPTW Solver & XAI
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: beeline_scheduler_backend
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    environment:
+      - BACKEND_PORT=${BACKEND_PORT}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # Клиентский интерфейс диспетчера (React + Vite)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: beeline_scheduler_frontend
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     environment:
-      - VITE_API_URL=http://localhost:8000/api
+      - FRONTEND_PORT=${FRONTEND_PORT}
+      - VITE_API_URL=http://localhost:${BACKEND_PORT}/api
     depends_on:
       - backend
     restart: unless-stopped
 
-  # Сервис 2: Основной бэкенд и оркестратор данных (FastAPI + SQLite)
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: beeline_scheduler_backend
-    ports:
-      - "8000:8000"
-    environment:
-      - ALGORITHM_SERVICE_URL=http://algorithm:8001
-      - DATABASE_URL=sqlite:////app/data/scheduler.db
-    volumes:
-      - backend_db_data:/app/data
-    depends_on:
-      - algorithm
-    restart: unless-stopped
-
-  # Сервис 3: Вычислительный сервис оптимизации и ИИ (FastAPI Stateless)
-  algorithm:
-    build:
-      context: ./algorithm
-      dockerfile: Dockerfile
-    container_name: beeline_scheduler_algorithm
-    ports:
-      - "8001:8001"
-    restart: unless-stopped
-
 volumes:
-  backend_db_data:
+  postgres_data:

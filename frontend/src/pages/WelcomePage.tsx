@@ -77,7 +77,7 @@ export const WelcomePage: React.FC = () => {
           <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
             <Sparkles className="w-4 h-4 text-purple-400 mb-1.5" />
             <div className="font-bold text-white text-xs">Объяснимый ИИ</div>
-            <div className="text-[11px] text-slate-400">XAI с кэшированием в SQLite</div>
+            <div className="text-[11px] text-slate-400">XAI с кэшированием в PostgreSQL</div>
           </div>
         </div>
       </section>
@@ -137,7 +137,7 @@ export const WelcomePage: React.FC = () => {
               <span>ИИ-Обоснование решения (XAI)</span>
             </div>
             <p className="text-xs text-slate-300">
-              Кликните по точке заявки на карте и нажмите <strong>«ИИ-Обоснование»</strong>. Сначала сработает генерация LLM (~3 сек), а повторный вызов моментально подтянется из кэша SQLite.
+              Кликните по точке заявки на карте и нажмите <strong>«ИИ-Обоснование»</strong>. Сначала сработает генерация LLM (~3 сек), а повторный вызов моментально подтянется из кэша PostgreSQL.
             </p>
           </div>
         </div>
