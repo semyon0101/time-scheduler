@@ -17,11 +17,11 @@ Usage:
   python test_cli.py --json
 """
 
+import argparse
+import json
 import os
 import sys
-import json
-import argparse
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 # Ensure algorithm module is in python path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -30,10 +30,10 @@ if ALGO_DIR not in sys.path:
     sys.path.insert(0, ALGO_DIR)
 
 try:
-    from app.schemas import EngineerModel, TaskModel
-    from app.solvers.baseline import solve_baseline
-    from app.solvers.optimizer import solve_vrptw
-    from app.xai.explainer import generate_explanation
+    from backend.Algorithm.schemas import EngineerModel, TaskModel
+    from backend.Algorithm.solvers.baseline import solve_baseline
+    from backend.Algorithm.solvers.optimizer import solve_vrptw
+    from backend.Algorithm.xai.explainer import generate_explanation
 except ImportError as e:
     print(f"[ERROR] Failed to import algorithm modules: {e}")
     print("Ensure you run this script with the project virtual environment:")
@@ -46,13 +46,14 @@ PRESET_ALIASES = {
     "yugcenter": "yugcenter",
     "yugovostok": "yugovostok",
     "yugo-vostok": "yugovostok",
-    "vostok": "vostok"
+    "vostok": "vostok",
 }
 
 
 def find_preset_file(preset_name: str) -> str:
     normalized = PRESET_ALIASES.get(preset_name.lower(), preset_name.lower())
     search_dirs = [
+        os.path.join(CURRENT_DIR, "data"),
         os.path.join(CURRENT_DIR, "seed"),
         os.path.join(CURRENT_DIR, "backend", "seed"),
         os.path.join(CURRENT_DIR, "backend", "seed", "raw"),
@@ -98,20 +99,27 @@ def diagnose_unassigned_task(task: TaskModel, engineers: List[EngineerModel]) ->
 def run_cli():
     parser = argparse.ArgumentParser(
         description="Beeline Business FSM Dispatcher - Offline VRPTW & XAI Test CLI",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--preset", type=str, default="vostok",
-                        help="Dataset preset: vostok, yugcenter, or yugovostok (default: vostok)")
-    parser.add_argument("--file", type=str, default=None,
-                        help="Path to custom JSON dataset file with engineers and tasks")
-    parser.add_argument("--explain-task", type=str, default=None,
-                        help="Generate offline AI explanation for a specific task ID")
-    parser.add_argument("--explain-engineer", type=str, default=None,
-                        help="Generate offline AI explanation for a specific engineer ID")
-    parser.add_argument("--explain-all", action="store_true",
-                        help="Print AI explanations for all unassigned tasks and idle engineers")
-    parser.add_argument("--json", action="store_true",
-                        help="Output full optimization result in JSON format to stdout")
+    parser.add_argument(
+        "--preset",
+        type=str,
+        default="vostok",
+        help="Dataset preset: vostok, yugcenter, or yugovostok (default: vostok)",
+    )
+    parser.add_argument(
+        "--file", type=str, default=None, help="Path to custom JSON dataset file with engineers and tasks"
+    )
+    parser.add_argument(
+        "--explain-task", type=str, default=None, help="Generate offline AI explanation for a specific task ID"
+    )
+    parser.add_argument(
+        "--explain-engineer", type=str, default=None, help="Generate offline AI explanation for a specific engineer ID"
+    )
+    parser.add_argument(
+        "--explain-all", action="store_true", help="Print AI explanations for all unassigned tasks and idle engineers"
+    )
+    parser.add_argument("--json", action="store_true", help="Output full optimization result in JSON format to stdout")
 
     args = parser.parse_args()
 
@@ -144,9 +152,15 @@ def run_cli():
 
     # 3. Calculate improvements
     mileage_saved_km = round(base_metrics.total_mileage_km - opt_metrics.total_mileage_km, 2)
-    mileage_saved_pct = round((mileage_saved_km / base_metrics.total_mileage_km * 100), 1) if base_metrics.total_mileage_km > 0 else 0.0
+    mileage_saved_pct = (
+        round((mileage_saved_km / base_metrics.total_mileage_km * 100), 1) if base_metrics.total_mileage_km > 0 else 0.0
+    )
     eng_saved_cnt = base_metrics.total_engineers_used - opt_metrics.total_engineers_used
-    eng_saved_pct = round((eng_saved_cnt / base_metrics.total_engineers_used * 100), 1) if base_metrics.total_engineers_used > 0 else 0.0
+    eng_saved_pct = (
+        round((eng_saved_cnt / base_metrics.total_engineers_used * 100), 1)
+        if base_metrics.total_engineers_used > 0
+        else 0.0
+    )
 
     opt_metrics.mileage_reduction_pct = mileage_saved_pct
     opt_metrics.engineers_reduction_pct = eng_saved_pct
@@ -174,7 +188,7 @@ def run_cli():
             "baseline_metrics": dump_model(base_metrics),
             "optimized_metrics": dump_model(opt_metrics),
             "routes": [dump_model(r) for r in opt_routes],
-            "unassigned_tasks": [dump_model(u) for u in opt_unassigned]
+            "unassigned_tasks": [dump_model(u) for u in opt_unassigned],
         }
         print(json.dumps(result, indent=2, ensure_ascii=False))
         return
@@ -195,11 +209,19 @@ def run_cli():
     base_travel_min = sum(r.total_travel_min for r in base_routes)
     opt_travel_min = sum(r.total_travel_min for r in opt_routes)
 
-    print(f"  {'Задействовано инженеров':<32} | {base_metrics.total_engineers_used:<18} | {opt_metrics.total_engineers_used:<18} (экономия -{eng_saved_cnt} / -{eng_saved_pct}%)")
-    print(f"  {'Суммарный пробег (км)':<32} | {base_metrics.total_mileage_km:<18.1f} | {opt_metrics.total_mileage_km:<18.1f} (экономия -{mileage_saved_km:.1f} км / -{mileage_saved_pct}%)")
+    print(
+        f"  {'Задействовано инженеров':<32} | {base_metrics.total_engineers_used:<18} | {opt_metrics.total_engineers_used:<18} (экономия -{eng_saved_cnt} / -{eng_saved_pct}%)"
+    )
+    print(
+        f"  {'Суммарный пробег (км)':<32} | {base_metrics.total_mileage_km:<18.1f} | {opt_metrics.total_mileage_km:<18.1f} (экономия -{mileage_saved_km:.1f} км / -{mileage_saved_pct}%)"
+    )
     print(f"  {'Время в пути (мин)':<32} | {base_travel_min:<18} | {opt_travel_min:<18}")
-    print(f"  {'Назначено заявок':<32} | {base_metrics.assigned_tasks_count:<18} | {opt_metrics.assigned_tasks_count:<18} ({round(opt_metrics.assigned_tasks_count/len(tasks)*100, 1)}% от общего)")
-    print(f"  {'Не назначено заявок':<32} | {base_metrics.unassigned_tasks_count:<18} | {opt_metrics.unassigned_tasks_count:<18}")
+    print(
+        f"  {'Назначено заявок':<32} | {base_metrics.assigned_tasks_count:<18} | {opt_metrics.assigned_tasks_count:<18} ({round(opt_metrics.assigned_tasks_count / len(tasks) * 100, 1)}% от общего)"
+    )
+    print(
+        f"  {'Не назначено заявок':<32} | {base_metrics.unassigned_tasks_count:<18} | {opt_metrics.unassigned_tasks_count:<18}"
+    )
     print(subsep)
 
     # 6. Engineer Routing Summary
@@ -215,7 +237,7 @@ def run_cli():
         route = route_by_eng.get(eng.id)
         stops_cnt = len(route.stops) if route else 0
         dist_km = route.total_distance_km if route else 0.0
-        
+
         if stops_cnt > 0:
             active_engineers.append(eng)
             tag = "⚡ АКТИВЕН"
@@ -267,7 +289,7 @@ def run_cli():
                 "travel_min": stop.travel_min,
                 "total_tasks_count": len(tasks),
                 "total_engineers_count": len(engineers),
-                "active_engineers_count": len(active_engineers)
+                "active_engineers_count": len(active_engineers),
             }
             exp = generate_explanation(tid, eng_id, context)
             print(f"[ОБЪЯСНЕНИЕ ДЛЯ ЗАЯВКИ #{tid}]\n")
@@ -302,7 +324,7 @@ def run_cli():
                     "total_travel_min": route.total_travel_min,
                     "first_start": route.stops[0].start_time,
                     "last_end": route.stops[-1].end_time,
-                    "skills": eng.skills
+                    "skills": eng.skills,
                 }
                 exp = generate_explanation(eid, eid, context)
             else:
@@ -312,7 +334,7 @@ def run_cli():
                     "engineer_name": eng.name,
                     "transport_type": eng.transport_type,
                     "shift": f"{eng.shift_start} - {eng.shift_end}",
-                    "skills": eng.skills
+                    "skills": eng.skills,
                 }
                 exp = generate_explanation(f"eng_idle_{eid}", eid, context)
             print(f"[ОБЪЯСНЕНИЕ ДЛЯ ИНЖЕНЕРА {eng.name} ({eid})]\n")
@@ -330,13 +352,15 @@ def run_cli():
                     "engineer_name": eng.name,
                     "transport_type": eng.transport_type,
                     "shift": f"{eng.shift_start} - {eng.shift_end}",
-                    "skills": eng.skills
+                    "skills": eng.skills,
                 }
                 print(generate_explanation(f"eng_idle_{eng.id}", eng.id, context))
                 print()
     else:
         # Provide sample XAI explanations automatically
-        print("  (Для генерации обоснования по конкретному объекту используйте: --explain-task <id> или --explain-engineer <id>)")
+        print(
+            "  (Для генерации обоснования по конкретному объекту используйте: --explain-task <id> или --explain-engineer <id>)"
+        )
         if active_engineers:
             sample_eng = active_engineers[0]
             sample_route = route_by_eng[sample_eng.id]
@@ -355,7 +379,7 @@ def run_cli():
                     "travel_min": sample_stop.travel_min,
                     "total_tasks_count": len(tasks),
                     "total_engineers_count": len(engineers),
-                    "active_engineers_count": len(active_engineers)
+                    "active_engineers_count": len(active_engineers),
                 }
                 print("\n  [ПРИМЕР 1: Обоснование назначения заявки]")
                 print("  " + "\n  ".join(generate_explanation(sample_stop.task_id, sample_eng.id, ctx).splitlines()))
@@ -371,10 +395,13 @@ def run_cli():
                 "skills": sample_idle.skills,
                 "total_tasks_count": len(tasks),
                 "total_engineers_count": len(engineers),
-                "active_engineers_count": len(active_engineers)
+                "active_engineers_count": len(active_engineers),
             }
             print("\n  [ПРИМЕР 2: Обоснование оперативного резерва специалиста]")
-            print("  " + "\n  ".join(generate_explanation(f"eng_idle_{sample_idle.id}", sample_idle.id, ctx_idle).splitlines()))
+            print(
+                "  "
+                + "\n  ".join(generate_explanation(f"eng_idle_{sample_idle.id}", sample_idle.id, ctx_idle).splitlines())
+            )
 
     print("\n" + sep)
     print("  ✅ Тестовый запуск алгоритма успешно завершен (100% Offline)")
