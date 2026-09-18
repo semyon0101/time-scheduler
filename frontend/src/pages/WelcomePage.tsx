@@ -104,7 +104,7 @@ export const WelcomePage: React.FC = () => {
               <span>Загрузка набора данных</span>
             </div>
             <p className="text-xs text-slate-300">
-              В шапке системы выберите любой из 6 датасетов (Синтетика и Контроль для секторов <strong>Восток</strong>, <strong>Юго-восток</strong> и <strong>Югоцентр</strong>). Все 370+ адресов точно геокодированы через официальную библиотеку <code>geopy</code>.
+              В шапке системы выберите любой готовый датасет: <strong>Восток (67 заявок)</strong>, <strong>Юго-восток (84 заявки)</strong> или <strong>Югоцентр (57 заявок)</strong>. Данные извлечены из официального архива и заранее геокодированы.
             </p>
           </div>
 
@@ -160,44 +160,26 @@ export const WelcomePage: React.FC = () => {
       <section className="px-6 py-6 max-w-4xl mx-auto w-full space-y-3">
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
           <Layers className="w-4 h-4 text-slate-400" />
-          Доступные демонстрационные районы Москвы (6 датасетов)
+          Доступные демонстрационные районы Москвы
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl space-y-1.5">
-            <div className="font-bold text-white text-xs flex items-center justify-between">
-              <span>Сектор «Восток»</span>
-              <span className="text-[10px] text-beeline-yellow bg-yellow-950/60 border border-yellow-800/40 px-1.5 py-0.2 rounded font-mono">12 инж</span>
-            </div>
-            <div className="text-[11px] text-slate-300">
-              • Синтетика: <strong className="text-white">69 заявок</strong><br/>
-              • Контроль: <strong className="text-white">66 заявок</strong>
-            </div>
-            <div className="text-[10px] text-slate-400">Таганский, Текстильщики, Кузьминки</div>
+          <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+            <div className="font-bold text-white text-xs">Район «Восток»</div>
+            <div className="text-[11px] text-slate-400 mt-1">67 заявок • 12 инженеров</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Таганский, Текстильщики, Кузьминки</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl space-y-1.5">
-            <div className="font-bold text-white text-xs flex items-center justify-between">
-              <span>Сектор «Юго-восток»</span>
-              <span className="text-[10px] text-beeline-yellow bg-yellow-950/60 border border-yellow-800/40 px-1.5 py-0.2 rounded font-mono">12 инж</span>
-            </div>
-            <div className="text-[11px] text-slate-300">
-              • Синтетика: <strong className="text-white">86 заявок</strong><br/>
-              • Контроль: <strong className="text-white">83 заявки</strong>
-            </div>
-            <div className="text-[10px] text-slate-400">Царицыно, Орехово-Борисово, Зябликово</div>
+          <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+            <div className="font-bold text-white text-xs">Район «Юго-восток»</div>
+            <div className="text-[11px] text-slate-400 mt-1">84 заявки • 12 инженеров</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Царицыно, Орехово-Борисово, Зябликово</div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl space-y-1.5">
-            <div className="font-bold text-white text-xs flex items-center justify-between">
-              <span>Сектор «Югоцентр»</span>
-              <span className="text-[10px] text-beeline-yellow bg-yellow-950/60 border border-yellow-800/40 px-1.5 py-0.2 rounded font-mono">11 инж</span>
-            </div>
-            <div className="text-[11px] text-slate-300">
-              • Синтетика: <strong className="text-white">59 заявок</strong><br/>
-              • Контроль: <strong className="text-white">56 заявок</strong>
-            </div>
-            <div className="text-[10px] text-slate-400">Даниловский, Хамовники, Донской</div>
+          <div className="bg-slate-900 border border-slate-800 p-3.5 rounded-xl">
+            <div className="font-bold text-white text-xs">Район «Югоцентр»</div>
+            <div className="text-[11px] text-slate-400 mt-1">57 заявок • 11 инженеров</div>
+            <div className="text-[10px] text-slate-400 mt-0.5">Даниловский, Хамовники, Донской</div>
           </div>
         </div>
       </section>

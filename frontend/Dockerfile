@@ -7,7 +7,6 @@ RUN npm install
 
 COPY . .
 
-EXPOSE ${FRONTEND_PORT:-3000}
+EXPOSE ${FRONTEND_PORT}
 
-CMD ["sh", "-c", "npm run dev -- --host 0.0.0.0 --port ${FRONTEND_PORT:-3000}"]
-
+CMD ["sh", "-c", "npm run dev -- --host 0.0.0.0 --port ${FRONTEND_PORT}"]

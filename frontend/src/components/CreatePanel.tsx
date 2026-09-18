@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Task, Engineer } from '../types';
-import { CANONICAL_SKILLS } from '../utils/tags';
 import { ArrowLeft, Plus, Wrench, Clock, MapPin, Car, Shield } from 'lucide-react';
 
 interface CreatePanelProps {
@@ -40,7 +39,11 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     'Работы на подключение и дозаказы'
   ]);
 
-  const allSkills = CANONICAL_SKILLS;
+  const allSkills = [
+    'Локальные работы',
+    'Работы на подключение и дозаказы',
+    'Аварийные работы'
+  ];
 
   const handleToggleSkill = (skill: string) => {
     if (engSkills.includes(skill)) {

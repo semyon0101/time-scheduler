@@ -76,10 +76,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     primaryBase,
     '/api/v1',
     'http://127.0.0.1:8000/api/v1',
-    'http://localhost:8000/api/v1',
-    '/api',
-    'http://127.0.0.1:8000/api',
-    'http://localhost:8000/api'
+    'http://localhost:8000/api/v1'
   ];
 
   let lastError: any = null;
@@ -190,12 +187,6 @@ export const api = {
 
   async resetSession(): Promise<StateResponse> {
     return request<StateResponse>('/session/reset', {
-      method: 'POST'
-    });
-  },
-
-  async createUniqueSession(preset: string = 'vostok'): Promise<{ dispatcher_id: string; active_preset: string; created_at: string | null; metrics: null }> {
-    return request<{ dispatcher_id: string; active_preset: string; created_at: string | null; metrics: null }>(`/session/unique-id?preset=${encodeURIComponent(preset)}`, {
       method: 'POST'
     });
   }
