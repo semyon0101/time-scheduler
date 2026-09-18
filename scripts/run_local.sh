@@ -49,13 +49,21 @@ echo "========================================================="
 # 1. Запуск Backend Service (со встроенным алгоритмом оптимизации VRPTW и XAI)
 echo "-> [1/2] Запуск Backend API на порту $BACKEND_PORT..."
 BACKEND_DIR="$DIR/backend"
-PYTHONPATH="$DIR:$BACKEND_DIR" BACKEND_PORT="$BACKEND_PORT" DATABASE_URL="$DATABASE_URL" setsid "$DIR/venv/bin/python" -m uvicorn main:app --app-dir "$BACKEND_DIR" --host 0.0.0.0 --port "$BACKEND_PORT" > "$DIR/logs/backend.log" 2>&1 &
+PYTHON_BIN="$DIR/venv/bin/python"
+if [ ! -f "$PYTHON_BIN" ]; then
+    PYTHON_BIN="$DIR/.venv/bin/python"
+fi
+if [ ! -f "$PYTHON_BIN" ]; then
+    PYTHON_BIN="python3"
+fi
+
+PYTHONPATH="$DIR:$BACKEND_DIR" BACKEND_PORT="$BACKEND_PORT" DATABASE_URL="$DATABASE_URL" setsid "$PYTHON_BIN" -m uvicorn main:app --app-dir "$BACKEND_DIR" --host 0.0.0.0 --port "$BACKEND_PORT" > "$DIR/logs/backend.log" 2>&1 &
 BACKEND_PID=$!
 
 # 2. Запуск Frontend
 echo "-> [2/2] Запуск Frontend (React/Vite) на порту $FRONTEND_PORT..."
 cd "$DIR/frontend"
-FRONTEND_PORT="$FRONTEND_PORT" VITE_API_URL="http://localhost:$BACKEND_PORT/api" setsid npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" > "$DIR/logs/frontend.log" 2>&1 &
+FRONTEND_PORT="$FRONTEND_PORT" VITE_API_URL="http://localhost:$BACKEND_PORT/api/v1" setsid npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" > "$DIR/logs/frontend.log" 2>&1 &
 FRONT_PID=$!
 cd "$DIR"
 

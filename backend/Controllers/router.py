@@ -19,7 +19,12 @@ root_router.include_router(health_router)
 v1_router = APIRouter(prefix="/api/v1")
 v1_router.include_router(v1_endpoints)
 
+# Unversioned router at /api for backward compatibility
+api_router = APIRouter(prefix="/api")
+api_router.include_router(v1_endpoints)
+
 __all__ = [
+    "api_router",
     "engineer_router",
     "health_router",
     "root_router",

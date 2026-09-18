@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.Controllers.router import root_router, v1_router
+from backend.Controllers.router import api_router, root_router, v1_router
 from backend.Entities.database import create_tables
 from backend.Models.settings import get_settings
 
@@ -26,6 +26,7 @@ app.add_middleware(
 
 app.include_router(root_router)
 app.include_router(v1_router)
+app.include_router(api_router)
 
 
 if __name__ == "__main__":
