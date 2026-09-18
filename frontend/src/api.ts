@@ -1,8 +1,13 @@
 import { StateResponse, Engineer, Task, ChangeEvent, ExplanationResponse } from './types';
 
 const getBaseUrl = () => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.trim()) {
+    let url = envUrl.trim();
+    if (url.endsWith('/api')) {
+      url = `${url}/v1`;
+    }
+    return url;
   }
   return '/api/v1';
 };
@@ -72,12 +77,21 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   };
 
   const primaryBase = getBaseUrl();
-  const candidateBases = [
-    primaryBase,
-    '/api/v1',
-    'http://127.0.0.1:8000/api/v1',
-    'http://localhost:8000/api/v1'
-  ];
+  const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  const candidateBases = Array.from(
+    new Set([
+      primaryBase,
+      primaryBase.replace(/\/v1$/, ''),
+      '/api/v1',
+      '/api',
+      `http://${host}:8000/api/v1`,
+      `http://${host}:8000/api`,
+      'http://localhost:8000/api/v1',
+      'http://localhost:8000/api',
+      'http://127.0.0.1:8000/api/v1',
+      'http://127.0.0.1:8000/api',
+    ])
+  );
 
   let lastError: any = null;
 
@@ -93,6 +107,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       });
 
       if (!res.ok) {
+        if (res.status === 404 && base !== candidateBases[candidateBases.length - 1]) {
+          continue;
+        }
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.detail || `HTTP error ${res.status}: ${res.statusText}`);
       }
@@ -101,6 +118,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     } catch (err) {
       lastError = err;
       if (err instanceof TypeError && err.message.includes('fetch')) {
+        continue;
+      }
+      if (err instanceof Error && err.message.includes('HTTP error 404')) {
         continue;
       }
       throw err;

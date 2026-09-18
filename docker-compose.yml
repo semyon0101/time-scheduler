@@ -38,7 +38,7 @@ services:
       - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     environment:
       - FRONTEND_PORT=${FRONTEND_PORT}
-      - VITE_API_URL=http://localhost:${BACKEND_PORT}/api
+      - VITE_API_URL=http://localhost:${BACKEND_PORT}/api/v1
     depends_on:
       - backend
     restart: unless-stopped
