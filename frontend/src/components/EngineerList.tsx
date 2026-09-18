@@ -1,188 +1,231 @@
 import React, { useState } from 'react';
-import { EngineerRoute, Engineer, Task } from '../types';
+import { Engineer, EngineerRoute, TravelSegmentFocus } from '../types';
 import { 
-  Car, Bus, Bike, Footprints, CheckCircle2, 
-  Clock, Navigation, Sparkles, Search, Shield, UserX 
+  Users, Search, Shield, Clock, MapPin, Car, Bus, Bike, 
+  Footprints, AlertTriangle, ChevronRight, CheckCircle2 
 } from 'lucide-react';
+import { 
+  ENGINEER_SEARCH_MODIFIERS, 
+  EngineerModifier, 
+  CANONICAL_SKILLS, 
+  ENGINEER_TAG_TRANSPORTS,
+  getEngineerModifierState, 
+  getEngineerTags, 
+  matchesSearchQuery, 
+  matchesSelectedTags 
+} from '../utils/tags';
 
 interface EngineerListProps {
+  engineers: Engineer[];
   routes: EngineerRoute[];
-  allEngineers: Engineer[];
-  tasks?: Task[];
-  selectedEngineerId?: string | null;
-  selectedTaskId?: string | null;
+  selectedEngineerId: string | null;
+  selectedTaskId: string | null;
   onSelectEngineer: (engineerId: string) => void;
+  onSelectTask: (taskId: string) => void;
+  onFocusTravelSegment?: (segment: TravelSegmentFocus) => void;
 }
 
-const ROUTE_COLORS = [
-  '#38bdf8', '#34d399', '#fbbf24', '#a78bfa',
-  '#f472b6', '#22d3ee', '#fb923c', '#a3e635',
-  '#2dd4bf', '#c084fc', '#f87171', '#818cf8'
-];
-
 export const EngineerList: React.FC<EngineerListProps> = ({
+  engineers,
   routes,
-  allEngineers,
-  tasks = [],
   selectedEngineerId,
   selectedTaskId,
-  onSelectEngineer
+  onSelectEngineer,
+  onSelectTask,
+  onFocusTravelSegment
 }) => {
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'active' | 'idle' | 'unavailable' | 'new' | 'task_assigned'>('all');
-  const [skillFilter, setSkillFilter] = useState<string | null>(null);
+  const [activeModifier, setActiveModifier] = useState<EngineerModifier>('Все');
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedTransports, setSelectedTransports] = useState<string[]>([]);
 
-  const routeByEngId = new Map(routes.map(r => [r.engineer_id, r]));
-  const assignedRoute = selectedTaskId ? routes.find(r => r.stops.some(s => s.task_id === selectedTaskId)) : null;
+  const routeByEngId = new Map(routes.map((r) => [r.engineer_id, r]));
 
-  const getTransportIcon = (transport: string) => {
-    switch (transport) {
-      case 'Автомобиль': return <Car className="w-3.5 h-3.5 text-blue-400" />;
-      case 'Общественный транспорт': return <Bus className="w-3.5 h-3.5 text-purple-400" />;
-      case 'Велосипед': return <Bike className="w-3.5 h-3.5 text-emerald-400" />;
-      case 'Пешеход': return <Footprints className="w-3.5 h-3.5 text-amber-400" />;
-      default: return <Car className="w-3.5 h-3.5 text-slate-400" />;
+  // Auto-bring assigned engineer to top if a task is selected
+  let assignedRoute: EngineerRoute | undefined;
+  if (selectedTaskId) {
+    assignedRoute = routes.find((r) => r.stops.some((s) => s.task_id === selectedTaskId));
+  }
+
+  const allEngineers = [...engineers];
+  if (assignedRoute) {
+    const idx = allEngineers.findIndex((e) => e.id === assignedRoute!.engineer_id);
+    if (idx > 0) {
+      const [fav] = allEngineers.splice(idx, 1);
+      allEngineers.unshift(fav);
+    }
+  }
+
+  const toggleSkill = (skill: string) => {
+    if (selectedSkills.includes(skill)) {
+      setSelectedSkills(selectedSkills.filter((s) => s !== skill));
+    } else {
+      setSelectedSkills([...selectedSkills, skill]);
     }
   };
+
+  const toggleTransport = (transport: string) => {
+    if (selectedTransports.includes(transport)) {
+      setSelectedTransports(selectedTransports.filter((t) => t !== transport));
+    } else {
+      setSelectedTransports([...selectedTransports, transport]);
+    }
+  };
+
+  const getTransportIcon = (type?: string) => {
+    switch (type) {
+      case 'Автомобиль': return <Car className="w-3 h-3 text-blue-400" />;
+      case 'Общественный транспорт': return <Bus className="w-3 h-3 text-purple-400" />;
+      case 'Велосипед': return <Bike className="w-3 h-3 text-emerald-400" />;
+      case 'Пешеход': return <Footprints className="w-3 h-3 text-amber-400" />;
+      default: return <Car className="w-3 h-3 text-slate-400" />;
+    }
+  };
+
+  // Modifier counters
+  const counts = {
+    'Все': allEngineers.length,
+    'На линии': allEngineers.filter((e) => (routeByEngId.get(e.id)?.stops.length || 0) > 0 && e.status !== 'unavailable' && e.status !== 'pending_unavailable').length,
+    'Резерв': allEngineers.filter((e) => (routeByEngId.get(e.id)?.stops.length || 0) === 0 && e.status !== 'unavailable' && e.status !== 'new' && e.status !== 'pending_unavailable').length,
+    'Сход': allEngineers.filter((e) => e.status === 'unavailable').length,
+    'Изменения': allEngineers.filter((e) => e.status === 'new' || e.status === 'pending_unavailable').length
+  };
+
+  const allSelectedTags = [...selectedSkills, ...selectedTransports];
 
   const filteredEngineers = allEngineers.filter((eng) => {
     const route = routeByEngId.get(eng.id);
     const stopsCount = route?.stops.length || 0;
-    const isUnavailable = eng.status === 'unavailable';
-    const isNew = eng.status === 'new';
-    const isIdle = stopsCount === 0 && !isUnavailable;
+    const modifierState = getEngineerModifierState(eng, stopsCount);
+    const tags = getEngineerTags(eng);
 
-    // Search filter
-    const searchLower = search.toLowerCase().trim();
-    const matchesSearch =
-      (eng.name || '').toLowerCase().includes(searchLower) ||
-      (eng.id || '').toLowerCase().includes(searchLower) ||
-      (eng.transport_type || '').toLowerCase().includes(searchLower) ||
-      (eng.skills && eng.skills.some(s => (s || '').toLowerCase().includes(searchLower)));
+    // 1. Match active modifier (single select)
+    if (activeModifier !== 'Все' && modifierState !== activeModifier) {
+      return false;
+    }
 
-    if (!matchesSearch) return false;
+    // 2. Match multi-select filter tags (skills and transport)
+    if (allSelectedTags.length > 0) {
+      if (!matchesSelectedTags(tags, allSelectedTags)) {
+        return false;
+      }
+    }
 
-    if (skillFilter && (!eng.skills || !eng.skills.includes(skillFilter))) return false;
-
-    // Tag filter
-    if (filter === 'task_assigned') return assignedRoute ? eng.id === assignedRoute.engineer_id : false;
-    if (filter === 'unavailable') return isUnavailable;
-    if (filter === 'new') return isNew;
-    if (filter === 'idle') return isIdle;
-    if (filter === 'active') return stopsCount > 0 && !isUnavailable;
-
-    return true;
+    // 3. Match text search (by name, ID, transport OR by tag label!)
+    return matchesSearchQuery(
+      search,
+      eng.name,
+      `#${eng.id} ${eng.transport_type || ''}`,
+      tags
+    );
   });
 
   return (
-    <div className="space-y-2 flex flex-col h-full">
-      {/* Search Bar */}
+    <div className="space-y-2 flex flex-col h-full font-sans">
+      {/* Search Input: Matches by name, transport or by tag */}
       <div className="relative">
         <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400" />
         <input
           type="text"
-          placeholder="Поиск инженера по имени, навыку или транспорту..."
+          placeholder="Поиск по имени, транспорту, ID или тегу работы..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full bg-slate-950/70 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-beeline-yellow transition-colors"
         />
       </div>
 
-      {/* Filter Pills */}
-      <div className="flex items-center gap-1 text-[11px] overflow-x-auto pb-0.5">
-        {assignedRoute && (
-          <button
-            onClick={() => setFilter(filter === 'task_assigned' ? 'all' : 'task_assigned')}
-            className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors flex items-center gap-1 shrink-0 ${
-              filter === 'task_assigned'
-                ? 'bg-amber-400 text-slate-950 font-bold ring-2 ring-amber-400/50'
-                : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
-            }`}
-          >
-            <span>🎯 #{selectedTaskId} ({assignedRoute.engineer_name.replace('Бригада ', '')})</span>
-            {filter === 'task_assigned' && <span className="text-[9px]">✕</span>}
-          </button>
-        )}
-
-        <button
-          onClick={() => { setFilter('all'); setSkillFilter(null); }}
-          className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
-            filter === 'all' && !skillFilter
-              ? 'bg-beeline-yellow text-slate-950 font-bold'
-              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          Все ({allEngineers.length})
-        </button>
-        <button
-          onClick={() => setFilter('active')}
-          className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
-            filter === 'active'
-              ? 'bg-emerald-500 text-slate-950 font-bold'
-              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          В работе ({allEngineers.filter(e => (routeByEngId.get(e.id)?.stops.length || 0) > 0 && e.status !== 'unavailable').length})
-        </button>
-        <button
-          onClick={() => setFilter('idle')}
-          className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
-            filter === 'idle'
-              ? 'bg-slate-600 text-white font-bold'
-              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          Резерв ({allEngineers.filter(e => (routeByEngId.get(e.id)?.stops.length || 0) === 0 && e.status !== 'unavailable').length})
-        </button>
-        <button
-          onClick={() => setFilter('unavailable')}
-          className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
-            filter === 'unavailable'
-              ? 'bg-rose-500 text-white font-bold'
-              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          Сход ({allEngineers.filter(e => e.status === 'unavailable').length})
-        </button>
-        <button
-          onClick={() => setFilter('new')}
-          className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
-            filter === 'new'
-              ? 'bg-sky-500 text-slate-950 font-bold'
-              : 'bg-slate-800 text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          Измененные ({allEngineers.filter(e => e.status === 'new').length})
-        </button>
+      {/* Tier 1: Search Modifiers (Single Select: Все, На линии, Резерв, Сход, Изменения) */}
+      <div className="flex items-center gap-1 text-[11px] overflow-x-auto pb-0.5 scrollbar-none">
+        {ENGINEER_SEARCH_MODIFIERS.map((mod) => {
+          const isActive = activeModifier === mod;
+          return (
+            <button
+              key={mod}
+              type="button"
+              onClick={() => setActiveModifier(mod)}
+              className={`px-2 py-0.5 rounded-md font-semibold shrink-0 cursor-pointer transition-colors flex items-center gap-1 ${
+                isActive
+                  ? mod === 'Сход'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'bg-beeline-yellow text-slate-950 shadow-sm'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              <span>{mod}</span>
+              <span className={`text-[10px] px-1 py-0.2 rounded-full font-bold ${
+                isActive ? 'bg-black/20 text-current' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {counts[mod]}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Active Skill Filter Indicator */}
-      {skillFilter && (
-        <div className="flex items-center justify-between bg-sky-950/40 border border-sky-800/60 px-2 py-0.5 rounded text-[10px] text-sky-300">
-          <span>Фильтр по навыку: <strong>{skillFilter}</strong></span>
-          <button
-            onClick={() => setSkillFilter(null)}
-            className="text-sky-400 hover:text-white font-bold ml-1 cursor-pointer"
-          >
-            ✕ Сбросить
-          </button>
-        </div>
-      )}
+      {/* Tier 2: Filter Tags (Skills + Transport Tags) */}
+      <div className="flex flex-wrap gap-1 text-[11px]">
+        {/* Skills */}
+        {CANONICAL_SKILLS.map((skill) => {
+          const isSelected = selectedSkills.includes(skill);
+          return (
+            <button
+              key={skill}
+              type="button"
+              onClick={() => toggleSkill(skill)}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors cursor-pointer flex items-center gap-1 border ${
+                isSelected
+                  ? 'bg-blue-600 text-white border-blue-500 font-bold shadow-sm'
+                  : 'bg-slate-950/60 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-300'
+              }`}
+            >
+              <Shield className="w-2.5 h-2.5 text-blue-400" />
+              <span>{skill}</span>
+              {isSelected && <span className="text-[9px]">✕</span>}
+            </button>
+          );
+        })}
 
-      {/* Engineers scrollable list */}
-      <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+        {/* Transport Tags (Requirement 6) */}
+        {ENGINEER_TAG_TRANSPORTS.map((trans) => {
+          const isSelected = selectedTransports.includes(trans);
+          return (
+            <button
+              key={trans}
+              type="button"
+              onClick={() => toggleTransport(trans)}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors cursor-pointer flex items-center gap-1 border ${
+                isSelected
+                  ? 'bg-purple-600 text-white border-purple-500 font-bold shadow-sm'
+                  : 'bg-purple-950/40 text-purple-300 border-purple-900/50 hover:border-purple-700 hover:text-purple-200'
+              }`}
+            >
+              {getTransportIcon(trans)}
+              <span>{trans}</span>
+              {isSelected && <span className="text-[9px]">✕</span>}
+            </button>
+          );
+        })}
+
+        {assignedRoute && (
+          <div className="px-2 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+            <span>🎯 Назначен на #{selectedTaskId}: {assignedRoute.engineer_name.replace('Бригада ', '')}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Engineer Cards List */}
+      <div className="space-y-2 overflow-y-auto flex-1 pr-1">
         {filteredEngineers.length === 0 ? (
-          <div className="text-center py-8 text-slate-500 text-xs">
-            Инженеры по заданному фильтру не найдены
+          <div className="text-center py-6 text-xs text-slate-500">
+            Инженеры не найдены по заданным фильтрам
           </div>
         ) : (
           filteredEngineers.map((eng) => {
             const route = routeByEngId.get(eng.id);
-            const stopsCount = route?.stops?.length || 0;
-            const isIdle = stopsCount === 0;
+            const stopsCount = route?.stops.length || 0;
+            const isSelected = selectedEngineerId === eng.id;
             const isUnavailable = eng.status === 'unavailable';
             const isNew = eng.status === 'new';
-            const isSelected = selectedEngineerId === eng.id;
 
             return (
               <div
@@ -190,92 +233,65 @@ export const EngineerList: React.FC<EngineerListProps> = ({
                 onClick={() => onSelectEngineer(eng.id)}
                 className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-yellow-500/15 border-yellow-500/50 shadow-md ring-1 ring-yellow-400/40'
+                    ? 'bg-slate-800/95 border-beeline-yellow shadow-md ring-1 ring-beeline-yellow/40'
                     : isUnavailable
-                    ? 'bg-rose-950/20 border-rose-900/30 opacity-60'
-                    : isIdle
-                    ? 'bg-slate-950/40 border-slate-800/60 hover:bg-slate-900/60'
-                    : 'bg-slate-950/70 border-slate-800/80 hover:bg-slate-800/50 hover:border-slate-700'
+                    ? 'bg-rose-950/20 border-rose-900/40 hover:border-rose-700/60'
+                    : 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
                 }`}
               >
-                {/* Header: Name, Transport, Status */}
-                <div className="flex items-center justify-between gap-1 mb-1.5">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-bold text-xs text-white truncate">
-                      {eng.name}
-                    </span>
-                    <div className="flex items-center gap-1 text-[10px] text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
-                      {getTransportIcon(eng.transport_type)}
-                      <span className="truncate max-w-[80px]">{eng.transport_type}</span>
+                {/* Header row: Name, transport, status */}
+                <div className="flex items-start justify-between gap-1.5">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-xs text-white">{eng.name}</span>
+                      {(isNew || eng.status === 'pending_unavailable') && (
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+                          {eng.status === 'pending_unavailable' ? 'Изменения (Сход)' : 'Изменения'}
+                        </span>
+                      )}
+                      {isUnavailable && (
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold">
+                          Сход
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                      {/* Transport Tag Badge */}
+                      <span className="px-1.5 py-0.2 rounded-full bg-purple-950/60 text-purple-300 border border-purple-800/60 font-medium flex items-center gap-1">
+                        {getTransportIcon(eng.transport_type)}
+                        <span>{eng.transport_type}</span>
+                      </span>
+                      <span className="flex items-center gap-0.5">
+                        <Clock className="w-2.5 h-2.5 text-slate-500" />
+                        <span>{eng.shift_start}–{eng.shift_end}</span>
+                      </span>
                     </div>
                   </div>
 
-                  {/* Status Badges */}
-                  <div className="flex items-center gap-1">
-                    {isUnavailable ? (
-                      <span className="bg-rose-950 text-rose-300 border border-rose-800 text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
-                        <UserX className="w-2.5 h-2.5 text-rose-400" />
-                        Сход с линии
-                      </span>
-                    ) : isNew ? (
-                      <span className="bg-sky-950 text-sky-300 border border-sky-800 text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
-                        <Sparkles className="w-2.5 h-2.5 text-sky-400" />
-                        Изменен (ожидает план)
-                      </span>
-                    ) : stopsCount > 0 ? (
-                      <span className="bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" />
-                        {stopsCount} заявок
-                      </span>
-                    ) : (
-                      <span className="bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded">
-                        В резерве
-                      </span>
-                    )}
+                  <div className="text-right shrink-0">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                      isUnavailable
+                        ? 'bg-rose-900/40 text-rose-400 border border-rose-800/50'
+                        : stopsCount > 0
+                        ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-800/50'
+                        : 'bg-slate-900 text-slate-400 border border-slate-800'
+                    }`}>
+                      {isUnavailable ? 'Сход с линии' : (stopsCount > 0 ? `${stopsCount} заявок` : 'В резерве')}
+                    </span>
                   </div>
                 </div>
 
                 {/* Skills tags */}
-                {eng.skills && eng.skills.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-1">
-                    {eng.skills.map((s, sIdx) => {
-                      const isSkillActive = skillFilter === s;
-                      return (
-                        <button
-                          key={sIdx}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSkillFilter(isSkillActive ? null : s);
-                          }}
-                          className={`text-[9px] px-1.5 py-0.5 rounded border transition-colors flex items-center gap-0.5 cursor-pointer ${
-                            isSkillActive
-                              ? 'bg-sky-500/20 text-sky-200 border-sky-400 font-medium ring-1 ring-sky-400'
-                              : 'bg-slate-900 text-slate-300 border-slate-800 hover:border-sky-500/50 hover:text-sky-300'
-                          }`}
-                          title={`Фильтровать по навыку: ${s}`}
-                        >
-                          <Shield className="w-2 h-2 text-sky-400" />
-                          <span className="truncate max-w-[120px]">{s}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Mileage and travel stats if active */}
-                {!isIdle && !isUnavailable && route && (
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1.5 border-t border-slate-800/60">
-                    <span className="flex items-center gap-1">
-                      <Navigation className="w-2.5 h-2.5 text-amber-400" />
-                      <span>{route.total_distance_km} км пробег</span>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {eng.skills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="text-[9px] px-1.5 py-0.2 rounded bg-slate-900 text-slate-400 border border-slate-800/80"
+                    >
+                      {skill}
                     </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-2.5 h-2.5 text-blue-400" />
-                      <span>{route.total_travel_min} мин в пути</span>
-                    </span>
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
             );
           })

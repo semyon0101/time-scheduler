@@ -220,7 +220,6 @@ __marimo__/
 # Project specific
 node_modules/
 dist/
-scheduler.db
 .pids
 logs/
 

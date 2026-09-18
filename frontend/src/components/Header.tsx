@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  Zap, Plus, Layers, CheckCircle2, 
+  Zap, Layers, CheckCircle2, 
   ChevronDown, HelpCircle 
 } from 'lucide-react';
 
@@ -10,8 +10,6 @@ interface HeaderProps {
   isOptimizing: boolean;
   onLoadPreset: (preset: string) => void;
   onOptimize: () => void;
-  onOpenCreateEngineer: () => void;
-  onOpenCreateTask: () => void;
   onResetSession: () => void;
   onNavigateHome?: () => void;
   onToggleHelp?: () => void;
@@ -24,8 +22,6 @@ export const Header: React.FC<HeaderProps> = ({
   isOptimizing,
   onLoadPreset,
   onOptimize,
-  onOpenCreateEngineer,
-  onOpenCreateTask,
   onResetSession,
   onNavigateHome,
   onToggleHelp,
@@ -34,10 +30,29 @@ export const Header: React.FC<HeaderProps> = ({
   const [presetDropdown, setPresetDropdown] = useState(false);
 
   const presets = [
-    { id: 'vostok', name: 'Восток (67 заявок, 12 инж)' },
-    { id: 'yugovostok', name: 'Юго-восток (84 заявки, 12 инж)' },
-    { id: 'yugocentr', name: 'Югоцентр (57 заявок, 11 инж)' }
+    { id: 'vostok_syn', name: 'Восток — Синтетика (69 заявок, 12 инж)' },
+    { id: 'vostok_ctrl', name: 'Восток — Контроль (66 заявок, 12 инж)' },
+    { id: 'yugovostok_syn', name: 'Юго-восток — Синтетика (86 заявок, 12 инж)' },
+    { id: 'yugovostok_ctrl', name: 'Юго-восток — Контроль (83 заявки, 12 инж)' },
+    { id: 'yugcenter_syn', name: 'Югоцентр — Синтетика (59 заявок, 11 инж)' },
+    { id: 'yugcenter_ctrl', name: 'Югоцентр — Контроль (56 заявок, 11 инж)' }
   ];
+
+  const getPresetLabel = (id: string) => {
+    switch (id) {
+      case 'vostok_syn':
+      case 'vostok': return 'Восток (Синтетика)';
+      case 'vostok_ctrl': return 'Восток (Контроль)';
+      case 'yugovostok_syn':
+      case 'yugovostok': return 'Юго-восток (Синтетика)';
+      case 'yugovostok_ctrl': return 'Юго-восток (Контроль)';
+      case 'yugcenter_syn':
+      case 'yugcenter':
+      case 'yugocentr': return 'Югоцентр (Синтетика)';
+      case 'yugcenter_ctrl': return 'Югоцентр (Контроль)';
+      default: return id;
+    }
+  };
 
   return (
     <header className="bg-slate-900 border-b border-slate-800 px-4 py-2.5 sticky top-0 z-30 shadow-lg">
@@ -64,11 +79,7 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Help question mark button (?) */}
               <button
                 onClick={onToggleHelp}
-                className={`p-1.5 rounded-lg border transition-all cursor-pointer flex items-center justify-center ${
-                  isHelpActive
-                    ? 'bg-beeline-yellow text-slate-950 border-beeline-yellow font-bold shadow-md shadow-yellow-500/20'
-                    : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white hover:bg-slate-700'
-                }`}
+                className="p-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all cursor-pointer flex items-center justify-center"
                 title="Справка / Руководство эксперта (?)"
               >
                 <HelpCircle className="w-4 h-4" />
@@ -98,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
             >
               <Layers className="w-3.5 h-3.5 text-beeline-yellow" />
-              <span>Датасет: <strong className="text-white capitalize">{activePreset}</strong></span>
+              <span>Датасет: <strong className="text-white">{getPresetLabel(activePreset)}</strong></span>
               <ChevronDown className="w-3 h-3 text-slate-400" />
             </button>
 
@@ -123,26 +134,6 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             )}
           </div>
-
-          {/* Add Engineer in right panel */}
-          <button
-            onClick={onOpenCreateEngineer}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-            title="Создать нового инженера через правое меню"
-          >
-            <Plus className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Новый инженер</span>
-          </button>
-
-          {/* Add Task in right panel */}
-          <button
-            onClick={onOpenCreateTask}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-            title="Создать новую задачу через правое меню"
-          >
-            <Plus className="w-3.5 h-3.5 text-sky-400" />
-            <span>Новая задача</span>
-          </button>
 
           {/* Run Optimization */}
           <button

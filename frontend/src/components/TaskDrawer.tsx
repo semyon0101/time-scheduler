@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Task, EngineerRoute, ExplanationResponse } from '../types';
+import { Task, EngineerRoute, ExplanationResponse, TravelSegmentFocus } from '../types';
 import { api } from '../api';
 import { SkeletonText } from './Skeleton';
+import { VerticalTimeline } from './VerticalTimeline';
 import { 
   ArrowLeft, Clock, MapPin, Wrench, Sparkles, 
   Trash2, XCircle, UserCheck, ShieldCheck, Database, X 
@@ -41,6 +42,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
   let assignedEngineerId: string | null = null;
   let assignedEngineerName: string | null = null;
   let assignedStop: any = null;
+  let assignedRoute: EngineerRoute | null = null;
 
   for (const r of routes) {
     const s = r.stops.find((st) => st.task_id === task.id);
@@ -48,6 +50,7 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
       assignedEngineerId = r.engineer_id;
       assignedEngineerName = r.engineer_name;
       assignedStop = s;
+      assignedRoute = r;
       break;
     }
   }
@@ -135,88 +138,34 @@ export const TaskDrawer: React.FC<TaskDrawerProps> = ({
           )}
         </div>
 
-        {/* 0.00 - 24.00 TIMELINE SCALE (Without travel time, work start/end only) */}
-        <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-bold text-white flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-beeline-yellow" />
-              Шкала времени визита (00:00 – 24:00)
-            </span>
-            <span className="text-[11px] text-slate-400 font-mono">
-              Окно: {task.window_start} – {task.window_end}
-            </span>
-          </div>
-
-          {/* Timeline Bar Track */}
-          <div className="space-y-1">
-            <div className="relative h-9 bg-slate-900 rounded-lg border border-slate-800 overflow-hidden">
-              {/* Hour Grid Markers */}
-              {hourMarks.map((h) => (
-                <div
-                  key={h}
-                  className="absolute top-0 bottom-0 border-r border-slate-800/60 pointer-events-none"
-                  style={{ left: `${(h / 24) * 100}%` }}
-                />
-              ))}
-
-              {/* Client Window Boundary (Subtle yellow highlight) */}
-              <div
-                className="absolute top-0 bottom-0 bg-yellow-500/10 border-l border-r border-yellow-500/40 pointer-events-none"
-                style={{ left: `${windowLeftPct}%`, width: `${windowWidthPct}%` }}
-                title={`Клиентское окно визита: ${task.window_start} - ${task.window_end}`}
-              />
-
-              {/* Status / Scheduled Work Block */}
-              {isCancelled ? (
-                <div className="absolute inset-0 bg-slate-800/80 text-slate-400 text-xs font-semibold flex items-center justify-center">
-                  Заявка отменена клиентом
-                </div>
-              ) : assignedStop ? (
-                /* Scheduled Work Execution (WITHOUT travel time, as requested) */
-                <div
-                  className="absolute top-1 bottom-1 bg-emerald-500 text-slate-950 font-bold text-[10px] rounded flex items-center justify-center overflow-hidden border border-emerald-300 shadow-md transition-all hover:scale-105 z-10 px-1"
-                  style={{ left: `${workLeftPct}%`, width: `${workWidthPct}%` }}
-                  title={`Время работы: ${assignedStop.start_time} - ${assignedStop.end_time} (${task.duration_min} мин)`}
-                >
-                  <span className="truncate">
-                    {assignedStop.start_time} – {assignedStop.end_time}
-                  </span>
-                </div>
-              ) : (
-                <div className="absolute inset-0 text-amber-400/80 text-[11px] font-medium flex items-center justify-center">
-                  Ожидает назначения при оптимизации
-                </div>
-              )}
+        {/* REUSABLE VERTICAL TIMELINE (08:00 to 22:00) with active task highlighted */}
+        {assignedRoute ? (
+          <VerticalTimeline
+            route={assignedRoute}
+            tasks={[task]}
+            mode="compact"
+            highlightedTaskId={task.id}
+            defaultExpanded={true}
+            onSelectTask={() => {}}
+            onOpenExplanation={() => handleFetchExplanation()}
+            onCancelTask={onCancelTask}
+          />
+        ) : (
+          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between text-xs pb-1 border-b border-slate-800/80">
+              <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-400" />
+                <span>Окно визита клиента</span>
+              </span>
+              <span className="font-mono text-xs text-beeline-yellow font-bold">
+                {task.window_start} – {task.window_end}
+              </span>
             </div>
-
-            {/* Hour Axis Labels */}
-            <div className="relative h-4 text-[9px] text-slate-400 font-mono">
-              {hourMarks.map((h) => (
-                <div
-                  key={h}
-                  className="absolute transform -translate-x-1/2"
-                  style={{ left: `${(h / 24) * 100}%` }}
-                >
-                  {h < 10 ? `0${h}:00` : `${h}:00`}
-                </div>
-              ))}
+            <div className="text-xs text-slate-400">
+              Длительность работ: <strong className="text-white">{task.duration_min} мин</strong>. Заявка не назначена на инженера. Нажмите «⚡ Распланировать» для автоматического подбора исполнителя.
             </div>
           </div>
-
-          {/* Timeline Legend */}
-          <div className="flex items-center gap-3 text-[10px] text-slate-400 pt-1 border-t border-slate-800/60">
-            <div className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm bg-yellow-500/20 border border-yellow-500/50"></span>
-              <span>Окно визита ({task.window_start}–{task.window_end})</span>
-            </div>
-            {assignedStop && (
-              <div className="flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>
-                <span>Выполнение работ ({assignedStop.start_time}–{assignedStop.end_time})</span>
-              </div>
-            )}
-          </div>
-        </div>
+        )}
 
         {/* Assigned Engineer Card */}
         <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-2">

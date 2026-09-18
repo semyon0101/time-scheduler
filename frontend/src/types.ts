@@ -99,3 +99,66 @@ export interface ChangeEvent {
   task_id?: string;
   engineer_id?: string;
 }
+
+export type FocusTargetType = 'none' | 'task' | 'engineer_route' | 'travel_segment';
+
+export interface TravelSegmentFocus {
+  from: [number, number];       // [lon, lat]
+  to: [number, number];         // [lon, lat]
+  fromTitle?: string;
+  toTitle?: string;
+  engineerId?: string;
+  engineerName?: string;
+  travelMin?: number;
+  travelKm?: number;
+}
+
+export interface MapFocusState {
+  type: FocusTargetType;
+  taskId?: string | null;
+  engineerId?: string | null;
+  segment?: TravelSegmentFocus | null;
+  nonce?: number;
+}
+
+export const createNoneFocus = (): MapFocusState => ({
+  type: 'none',
+  taskId: null,
+  engineerId: null,
+  segment: null,
+  nonce: Date.now()
+});
+
+export const createTaskFocus = (taskId: string): MapFocusState => ({
+  type: 'task',
+  taskId,
+  engineerId: null,
+  segment: null,
+  nonce: Date.now() + Math.random()
+});
+
+export const createEngineerFocus = (engineerId: string): MapFocusState => ({
+  type: 'engineer_route',
+  engineerId,
+  taskId: null,
+  segment: null,
+  nonce: Date.now() + Math.random()
+});
+
+export const createSegmentFocus = (segment: TravelSegmentFocus): MapFocusState => ({
+  type: 'travel_segment',
+  segment,
+  taskId: null,
+  engineerId: segment.engineerId || null,
+  nonce: Date.now() + Math.random()
+});
+
+export const isTaskFocused = (focus?: MapFocusState | null, taskId?: string | null): boolean =>
+  Boolean(focus && focus.type === 'task' && taskId && focus.taskId === taskId);
+
+export const isEngineerFocused = (focus?: MapFocusState | null, engineerId?: string | null): boolean =>
+  Boolean(focus && focus.type === 'engineer_route' && engineerId && focus.engineerId === engineerId);
+
+export const isSegmentFocused = (focus?: MapFocusState | null): boolean =>
+  Boolean(focus && focus.type === 'travel_segment' && focus.segment);
+

@@ -25,3 +25,21 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* MapLibre GL custom popup overrides to eliminate default white background and borders */
+.maplibregl-popup {
+  pointer-events: none;
+}
+
+.maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  pointer-events: auto;
+}
+
+.maplibregl-popup-tip {
+  display: none !important;
+}
+
