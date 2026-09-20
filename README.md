@@ -133,14 +133,14 @@ docker compose up db
 **Терминал 2: Backend API**
 ```bash
 source venv/bin/activate
-export $(cat .env | xargs)
+source .env
 uvicorn main:app --app-dir backend --host 0.0.0.0 --port $BACKEND_PORT --reload
 ```
 
 **Терминал 3: Frontend**
 ```bash
 cd frontend
-export $(cat ../.env | xargs)
+source ../.env
 npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT
 ```
 
