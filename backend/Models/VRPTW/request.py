@@ -31,5 +31,5 @@ class TaskRequest(BaseModel):
 
 
 class Request(BaseModel):
-    engineers: EngineerRequest
-    tasks: TaskRequest
+    engineers: list[EngineerRequest]
+    tasks: list[TaskRequest]
