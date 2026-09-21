@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Zap, MapPin, Shield, Clock, Car, Sparkles, 
-  ArrowRight, CheckCircle2, Award, ChevronRight, Layers, FileText 
+import {
+  Zap, Shield, Sparkles,
+  ArrowRight, Award, Layers, FileText
 } from 'lucide-react';
 
 export const WelcomePage: React.FC = () => {
@@ -43,14 +43,14 @@ export const WelcomePage: React.FC = () => {
         </div>
 
         <h1 className="text-3xl md:text-5xl font-black tracking-tight text-white leading-tight">
-          Интеллектуальный помощник диспетчера <br className="hidden md:block"/>
+          Интеллектуальный помощник диспетчера <br className="hidden md:block" />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-beeline-yellow via-amber-300 to-yellow-500">
             «Билайн Бизнес»
           </span>
         </h1>
 
         <p className="text-sm md:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          Автоматическое распределение выездных инженеров (VRPTW), интерактивные маршруты на карте Москвы, 
+          Автоматическое распределение выездных инженеров (VRPTW), интерактивные маршруты на карте Москвы,
           мгновенное перепланирование при форс-мажорах и объяснимый искусственный интеллект (XAI).
         </p>
 
