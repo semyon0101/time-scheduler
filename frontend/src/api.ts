@@ -3,8 +3,21 @@ import {
   Engineer,
   Task,
   ChangeEvent,
-  ExplanationResponse,
+  ExplanationResponse
 } from "./types";
+import {
+  RawStateResponseDTO,
+  RawEngineerDTO,
+  RawTaskDTO
+} from "./dto";
+import {
+  normalizeStateResponse,
+  normalizeEngineer,
+  normalizeTask,
+  serializeEngineerForBackend,
+  serializeTaskForBackend,
+  serializeChangeEventForBackend
+} from "./utils/adapters";
 
 export function getDispatcherId(): string {
   if (typeof window !== "undefined") {
@@ -96,23 +109,28 @@ async function request<T>(
 
 export const api = {
   async initSession(): Promise<StateResponse> {
-    return request<StateResponse>("/session/init");
+    const raw = await request<RawStateResponseDTO>("/session/init");
+    return normalizeStateResponse(raw);
   },
 
   async getState(): Promise<StateResponse> {
-    return request<StateResponse>("/state");
+    const raw = await request<RawStateResponseDTO>("/state");
+    return normalizeStateResponse(raw);
   },
 
   async loadPreset(preset: string): Promise<StateResponse> {
-    return request<StateResponse>(
+    const raw = await request<RawStateResponseDTO>(
       "/demo/seed",
       "POST",
       JSON.stringify({ preset }),
     );
+    return normalizeStateResponse(raw);
   },
 
   async createEngineer(engineer: Partial<Engineer>): Promise<Engineer> {
-    return request<Engineer>("/engineers", "POST", JSON.stringify(engineer));
+    const payload = serializeEngineerForBackend(engineer);
+    const raw = await request<RawEngineerDTO>("/engineers", "POST", JSON.stringify(payload));
+    return normalizeEngineer(raw);
   },
 
   async deleteEngineer(engineerId: string): Promise<void> {
@@ -120,7 +138,9 @@ export const api = {
   },
 
   async createTask(task: Partial<Task>): Promise<Task> {
-    return request<Task>("/tasks", "POST", JSON.stringify(task));
+    const payload = serializeTaskForBackend(task);
+    const raw = await request<RawTaskDTO>("/tasks", "POST", JSON.stringify(payload));
+    return normalizeTask(raw);
   },
 
   async deleteTask(taskId: string): Promise<void> {
@@ -128,19 +148,23 @@ export const api = {
   },
 
   async cancelTask(taskId: string): Promise<StateResponse> {
-    return request<StateResponse>(`/tasks/${taskId}/cancel`, "POST");
+    const raw = await request<RawStateResponseDTO>(`/tasks/${taskId}/cancel`, "POST");
+    return normalizeStateResponse(raw);
   },
 
   async optimize(): Promise<StateResponse> {
-    return request<StateResponse>("/schedule/optimize", "POST");
+    const raw = await request<RawStateResponseDTO>("/schedule/optimize", "POST");
+    return normalizeStateResponse(raw);
   },
 
   async replan(events: ChangeEvent[]): Promise<StateResponse> {
-    return request<StateResponse>(
+    const serializedEvents = events.map(serializeChangeEventForBackend);
+    const raw = await request<RawStateResponseDTO>(
       "/schedule/replan",
       "POST",
-      JSON.stringify({ events }),
+      JSON.stringify({ events: serializedEvents }),
     );
+    return normalizeStateResponse(raw);
   },
 
   async getExplanation(taskId: string): Promise<ExplanationResponse> {
@@ -154,13 +178,15 @@ export const api = {
   },
 
   async toggleEngineerStatus(engineerId: string): Promise<StateResponse> {
-    return request<StateResponse>(
+    const raw = await request<RawStateResponseDTO>(
       `/engineers/${engineerId}/toggle_status`,
       "POST",
     );
+    return normalizeStateResponse(raw);
   },
 
   async resetSession(): Promise<StateResponse> {
-    return request<StateResponse>("/session/reset", "POST");
+    const raw = await request<RawStateResponseDTO>("/session/reset", "POST");
+    return normalizeStateResponse(raw);
   },
 };

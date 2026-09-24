@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  Zap, Plus, Layers, CheckCircle2, 
+  Zap, Layers, CheckCircle2, 
   ChevronDown, HelpCircle 
 } from 'lucide-react';
 
@@ -10,12 +10,11 @@ interface HeaderProps {
   isOptimizing: boolean;
   onLoadPreset: (preset: string) => void;
   onOptimize: () => void;
-  onOpenCreateEngineer: () => void;
-  onOpenCreateTask: () => void;
   onResetSession: () => void;
   onNavigateHome?: () => void;
   onToggleHelp?: () => void;
   isHelpActive?: boolean;
+  pendingChangesCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -24,12 +23,11 @@ export const Header: React.FC<HeaderProps> = ({
   isOptimizing,
   onLoadPreset,
   onOptimize,
-  onOpenCreateEngineer,
-  onOpenCreateTask,
   onResetSession,
   onNavigateHome,
   onToggleHelp,
-  isHelpActive
+  isHelpActive,
+  pendingChangesCount = 0,
 }) => {
   const [presetDropdown, setPresetDropdown] = useState(false);
 
@@ -124,27 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Add Engineer in right panel */}
-          <button
-            onClick={onOpenCreateEngineer}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-            title="Создать нового инженера через правое меню"
-          >
-            <Plus className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Новый инженер</span>
-          </button>
-
-          {/* Add Task in right panel */}
-          <button
-            onClick={onOpenCreateTask}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-            title="Создать новую задачу через правое меню"
-          >
-            <Plus className="w-3.5 h-3.5 text-sky-400" />
-            <span>Новая задача</span>
-          </button>
-
-          {/* Run Optimization */}
+          {/* Run Optimization / Replan */}
           <button
             onClick={onOptimize}
             disabled={isOptimizing}
@@ -156,6 +134,11 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Zap className={`w-3.5 h-3.5 fill-current ${isOptimizing ? 'animate-spin' : ''}`} />
             <span>{isOptimizing ? 'Оптимизация...' : '⚡ Распланировать'}</span>
+            {pendingChangesCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 bg-rose-600 text-white text-[10px] font-black rounded-full shadow-sm">
+                {pendingChangesCount}
+              </span>
+            )}
           </button>
         </div>
       </div>

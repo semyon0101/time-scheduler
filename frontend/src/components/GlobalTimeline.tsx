@@ -1,15 +1,20 @@
-import React, { useState } from 'react';
-import { Engineer, EngineerRoute, Task } from '../types';
-import { Clock, ChevronDown, ChevronUp, Car, Bus, Bike, Footprints } from 'lucide-react';
+import React from 'react';
+import { EngineerStatusEnum, Focus } from '../types';
+import { dataStore } from '../utils/DataStore';
+import { Clock, Users, ArrowRight } from 'lucide-react';
+import { getTransportProps } from '../utils/formatters';
+import { Timeline } from './Timeline';
 
-interface GlobalTimelineProps {
-  engineers: Engineer[];
-  routes: EngineerRoute[];
-  tasks?: Task[];
+export interface GlobalTimelineProps {
+  engineerIds: string[];
   selectedEngineerId?: string | null;
   selectedTaskId?: string | null;
+  selectedRoadId?: string | null;
+  focus?: Focus;
+  onSetFocus?: (focus: Focus) => void;
   onSelectEngineer: (engineerId: string) => void;
   onSelectTask?: (taskId: string) => void;
+  onSelectRoad?: (roadId: string) => void;
   onFocusTravelSegment?: (segment: {
     from: [number, number];
     to: [number, number];
@@ -19,290 +24,268 @@ interface GlobalTimelineProps {
   }) => void;
 }
 
-function timeToMin(t?: string): number {
-  if (!t) return 0;
-  const parts = t.split(':');
-  if (parts.length < 2) return 0;
-  const h = parseInt(parts[0], 10) || 0;
-  const m = parseInt(parts[1], 10) || 0;
-  return Math.min(1440, Math.max(0, h * 60 + m));
-}
+const ENGINEER_COLORS = [
+  '#06b6d4', // Cyan
+  '#f97316', // Orange
+  '#a855f7', // Purple
+  '#10b981', // Emerald
+  '#ec4899', // Pink
+  '#3b82f6', // Blue
+  '#14b8a6', // Teal
+  '#84cc16', // Lime
+  '#eab308', // Yellow
+  '#6366f1', // Indigo
+];
 
 export const GlobalTimeline: React.FC<GlobalTimelineProps> = ({
-  engineers,
-  routes,
-  tasks = [],
+  engineerIds,
   selectedEngineerId,
   selectedTaskId,
+  selectedRoadId,
+  focus,
+  onSetFocus,
   onSelectEngineer,
   onSelectTask,
-  onFocusTravelSegment
+  onSelectRoad,
+  onFocusTravelSegment,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
-
-  // 2-hour interval marks
+  // 2-hour interval marks for 24h
   const hourMarks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];
 
-  const getTransportIcon = (type: string) => {
-    switch (type) {
-      case 'Автомобиль': return <Car className="w-3 h-3 text-sky-400" />;
-      case 'Общественный транспорт': return <Bus className="w-3 h-3 text-amber-400" />;
-      case 'Велосипед': return <Bike className="w-3 h-3 text-emerald-400" />;
-      default: return <Footprints className="w-3 h-3 text-purple-400" />;
-    }
+  // Derive active focus entities
+  const effectiveEngineerId =
+    focus?.kind === 'engineer'
+      ? focus.id
+      : focus?.kind === 'road'
+      ? dataStore.find_by_id_roads(focus.id)?.engineer_id || null
+      : selectedEngineerId;
+
+  const effectiveTaskId =
+    focus?.kind === 'task'
+      ? focus.id
+      : selectedTaskId;
+
+  const effectiveRoadId =
+    focus?.kind === 'road'
+      ? focus.id
+      : selectedRoadId;
+
+  const handleSelectEngineer = (engId: string) => {
+    if (onSetFocus) onSetFocus({ kind: 'engineer', id: engId });
+    onSelectEngineer(engId);
+  };
+
+  const handleSelectTask = (taskId: string) => {
+    if (onSetFocus) onSetFocus({ kind: 'task', id: taskId });
+    if (onSelectTask) onSelectTask(taskId);
+  };
+
+  const handleSelectRoad = (roadId: string) => {
+    if (onSetFocus) onSetFocus({ kind: 'road', id: roadId });
+    if (onSelectRoad) onSelectRoad(roadId);
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex flex-col">
-      {/* Header bar */}
-      <div className="px-3 py-2 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between text-xs">
-        <div className="flex items-center gap-2">
-          <Clock className="w-3.5 h-3.5 text-beeline-yellow" />
-          <span className="font-bold text-white">Глобальная шкала времени (00:00 – 24:00)</span>
-          <span className="text-[11px] text-slate-400">({engineers.length} инженеров)</span>
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col w-full h-full max-h-full overflow-hidden">
+      {/* Top Header Bar */}
+      <div className="px-5 py-3 bg-slate-950/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <Clock className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-sm text-white">Доска расписания инженеров</span>
+              <span className="text-[11px] font-mono text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded-full border border-cyan-800/40">
+                00:00 – 24:00
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+              <Users className="w-3 h-3 text-slate-500" />
+              <span>{engineerIds.length} инженеров на линии</span>
+              <span className="text-slate-600">•</span>
+              <span className="text-slate-500">Горизонтальный скролл доски</span>
+              <ArrowRight className="w-3 h-3 text-slate-500 inline" />
+            </div>
+          </div>
         </div>
 
-        {/* Legend */}
-        <div className="hidden sm:flex items-center gap-2.5 text-[10px]">
-          <div className="flex items-center gap-1">
+        {/* Clean High-Contrast Legend */}
+        <div className="flex items-center gap-3 text-[11px] bg-slate-950/80 px-3 py-1.5 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-sky-500"></span>
             <span className="text-slate-300">В пути</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500"></span>
             <span className="text-slate-300">Работы</span>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-sm bg-yellow-400 ring-1 ring-yellow-300"></span>
-            <span className="text-yellow-300 font-bold">Выбрана</span>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-amber-500"></span>
+            <span className="text-amber-300">Срочно</span>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-sm bg-slate-600"></span>
-            <span className="text-slate-400 line-through">Отменена</span>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-cyan-400 ring-2 ring-white"></span>
+            <span className="text-cyan-200 font-bold">Выбрано</span>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-sm bg-red-500/40 border border-red-500"></span>
-            <span className="text-slate-300">Недоступен</span>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-slate-600 line-through"></span>
+            <span className="text-slate-400">Отмена</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-rose-500/60 border border-rose-500"></span>
+            <span className="text-rose-300">Сход</span>
+          </div>
+          <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-sm bg-slate-700"></span>
-            <span className="text-slate-300">Резерв</span>
+            <span className="text-slate-400">Резерв</span>
           </div>
-
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
-            title={isExpanded ? 'Свернуть' : 'Развернуть'}
-          >
-            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
         </div>
       </div>
 
-      {isExpanded && (
-        <div className="overflow-x-auto">
-          <div className="min-w-[700px] p-2 space-y-1.5">
-            {/* Hour labels header */}
-            <div className="flex text-[10px] text-slate-400 pb-1 border-b border-slate-800/80">
-              <div className="w-48 shrink-0 font-semibold text-slate-300 px-1">Инженер / Транспорт</div>
-              <div className="flex-1 relative h-4">
-                {hourMarks.map((h) => {
-                  const pct = (h / 24) * 100;
-                  return (
-                    <div
-                      key={h}
-                      className="absolute transform -translate-x-1/2 font-mono text-[9px]"
-                      style={{ left: `${pct}%` }}
-                    >
-                      {h < 10 ? `0${h}:00` : `${h}:00`}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+      {/* Main Horizontally Scrollable Columns Board (stretches to remaining vertical height) */}
+      <div className="flex-1 min-h-0 flex flex-row overflow-x-auto overflow-y-hidden p-3 gap-3 items-stretch select-none">
+        {/* Sticky Left Shared Vertical Time Scale */}
+        <div className="w-12 shrink-0 sticky left-0 z-30 bg-slate-900/95 backdrop-blur-md border-r border-slate-800 flex flex-col h-full select-none">
+          {/* Header Spacer matching engineer cards */}
+          <div className="h-[76px] shrink-0 border-b border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            Время
+          </div>
 
-            {/* Engineer rows */}
-            <div className="max-h-52 overflow-y-auto space-y-1 pr-1">
-              {engineers.map((eng) => {
-                const route = routes.find((r) => r.engineer_id === eng.id);
-                const stops = route?.stops || [];
-                const isSelected = selectedEngineerId === eng.id;
-                const isUnavailable = eng.status === 'unavailable';
-                const isIdle = stops.length === 0;
-                const hasSelectedTask = selectedTaskId ? stops.some(s => s.task_id === selectedTaskId) : false;
-
-                const shiftStartMin = timeToMin(eng.shift_start || '09:00');
-                const shiftEndMin = timeToMin(eng.shift_end || '22:00');
-                const shiftLeftPct = (shiftStartMin / 1440) * 100;
-                const shiftWidthPct = Math.max(0, ((shiftEndMin - shiftStartMin) / 1440) * 100);
-
-                return (
-                  <div
-                    key={eng.id}
-                    className={`flex items-center text-xs rounded-lg p-1 transition-all ${
-                      isSelected
-                        ? 'bg-yellow-500/20 border-2 border-yellow-400 shadow-lg ring-2 ring-yellow-400/40 z-20'
-                        : hasSelectedTask
-                        ? 'bg-yellow-500/10 border-2 border-yellow-500/60 shadow ring-1 ring-yellow-400/30'
-                        : selectedEngineerId
-                        ? 'bg-slate-950/30 border border-slate-800/30 opacity-40 hover:opacity-85'
-                        : 'bg-slate-950/40 hover:bg-slate-800/40 border border-slate-800/40'
-                    }`}
-                  >
-                    {/* Left Column: Engineer info */}
-                    <div
-                      onClick={() => onSelectEngineer(eng.id)}
-                      className="w-48 shrink-0 flex items-center justify-between pr-2 cursor-pointer select-none"
-                    >
-                      <div className="flex items-center gap-1.5 truncate">
-                        {getTransportIcon(eng.transport_type)}
-                        <span className={`font-semibold truncate text-[11px] ${
-                          isSelected ? 'text-beeline-yellow font-extrabold' : 'text-slate-200'
-                        }`} title={eng.name}>
-                          {eng.name.replace('Бригада ', '')}
-                        </span>
-                      </div>
-
-                      {isSelected ? (
-                        <span className="text-[9px] bg-yellow-400 text-slate-950 font-black px-1.5 py-0.5 rounded shrink-0 shadow">
-                          ВЫБРАН
-                        </span>
-                      ) : isUnavailable ? (
-                        <span className="text-[9px] bg-rose-950/60 text-rose-300 border border-rose-800/60 px-1 rounded shrink-0">
-                          Сход
-                        </span>
-                      ) : isIdle ? (
-                        <span className="text-[9px] bg-slate-800 text-slate-400 px-1 rounded shrink-0">
-                          Резерв
-                        </span>
-                      ) : (
-                        <span className="text-[9px] bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 px-1 rounded shrink-0">
-                          {stops.length} заявок
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Right Column: Timeline track */}
-                    <div className="flex-1 relative h-6 bg-slate-950/60 rounded overflow-hidden border border-slate-800/60">
-                      {/* Grid hour lines */}
-                      {hourMarks.map((h) => (
-                        <div
-                          key={h}
-                          className="absolute top-0 bottom-0 border-r border-slate-800/40 pointer-events-none"
-                          style={{ left: `${(h / 24) * 100}%` }}
-                        />
-                      ))}
-
-                      {/* Shift window boundary */}
-                      <div
-                        className="absolute top-0 bottom-0 bg-slate-800/20 border-l border-r border-slate-700/30 pointer-events-none"
-                        style={{ left: `${shiftLeftPct}%`, width: `${shiftWidthPct}%` }}
-                        title={`Смена: ${eng.shift_start} - ${eng.shift_end}`}
-                      />
-
-                      {/* Unavailable state */}
-                      {isUnavailable && (
-                        <div className="absolute inset-0 bg-red-950/70 border border-red-500/40 text-red-300 text-[10px] font-semibold flex items-center justify-center">
-                          Инженер сошел с линии (недоступен)
-                        </div>
-                      )}
-
-                      {/* Idle state */}
-                      {!isUnavailable && isIdle && (
-                        <div className="absolute inset-0 text-slate-500 text-[10px] flex items-center justify-center font-medium">
-                          Оперативный резерв (0 выездов)
-                        </div>
-                      )}
-
-                      {/* Active stops & travel blocks */}
-                      {!isUnavailable && !isIdle && (
-                        <>
-                          {route.stops.map((stop, sIdx) => {
-                            const startTimeMin = timeToMin(stop.start_time);
-                            const endTimeMin = timeToMin(stop.end_time);
-
-                            // Travel occurs directly before work begins
-                            const travelDurationMin = Math.max(1, stop.travel_min || 15);
-                            const depTimeMin = Math.max(0, startTimeMin - travelDurationMin);
-                            const travelLeftPct = (depTimeMin / 1440) * 100;
-                            const travelWidthPct = Math.max(0.6, (travelDurationMin / 1440) * 100);
-
-                            // Work block
-                            const workLeftPct = (startTimeMin / 1440) * 100;
-                            const workWidthPct = Math.max(0.8, ((endTimeMin - startTimeMin) / 1440) * 100);
-
-                            // POINT 7: Check if task was cancelled
-                            const fullTask = tasks.find((t) => t.id === stop.task_id);
-                            const isTaskCancelled = fullTask?.status === 'cancelled';
-
-                            // POINT 6: Check if task is currently selected
-                            const isTaskSelected = selectedTaskId === stop.task_id;
-
-                            // Coordinates for travel focus (Requirement 8)
-                            const prevCoords = sIdx === 0
-                              ? [eng.start_lon, eng.start_lat]
-                              : [route.stops[sIdx - 1].lon, route.stops[sIdx - 1].lat];
-
-                            return (
-                              <React.Fragment key={stop.task_id || sIdx}>
-                                {/* Travel Segment directly prior to work (Requirement 8: Focus on Map without menu change) */}
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onFocusTravelSegment) {
-                                      onFocusTravelSegment({
-                                        from: prevCoords as [number, number],
-                                        to: [stop.lon, stop.lat],
-                                        travelMin: stop.travel_min,
-                                        travelKm: stop.travel_km,
-                                        engineerName: eng.name
-                                      });
-                                    }
-                                  }}
-                                  className="absolute top-1 bottom-1 bg-sky-500/80 hover:bg-sky-400 hover:ring-2 hover:ring-amber-400 rounded-[2px] transition-all cursor-pointer z-10"
-                                  style={{ left: `${travelLeftPct}%`, width: `${travelWidthPct}%` }}
-                                  title={`Кликните, чтобы показать путь на карте: ${stop.travel_min} мин (${stop.travel_km} км) к #${stop.task_id}`}
-                                />
-
-                                {/* Work Execution Segment (Points 6 & 7) */}
-                                <div
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onSelectTask) onSelectTask(stop.task_id);
-                                  }}
-                                  className={`absolute top-0.5 bottom-0.5 font-bold text-[9px] rounded flex items-center justify-center overflow-hidden transition-all cursor-pointer px-0.5 ${
-                                    isTaskSelected
-                                      ? 'bg-yellow-400 text-slate-950 font-black ring-4 ring-yellow-400/90 ring-offset-2 ring-offset-slate-900 border-2 border-white scale-110 z-30 shadow-2xl'
-                                      : isTaskCancelled
-                                      ? 'bg-slate-600 hover:bg-slate-500 text-slate-300 border border-slate-500 line-through opacity-75 z-10'
-                                      : `bg-emerald-500 hover:bg-emerald-400 text-slate-950 border border-emerald-300 shadow-sm z-10 ${
-                                          selectedTaskId ? 'opacity-40 hover:opacity-100' : 'opacity-100'
-                                        }`
-                                  }`}
-                                  style={{ left: `${workLeftPct}%`, width: `${workWidthPct}%` }}
-                                  title={
-                                    isTaskCancelled
-                                      ? `Заявка #${stop.task_id} ОТМЕНЕНА (будет удалена при пересчете)`
-                                      : `Заявка #${stop.task_id}: ${stop.address} (${stop.start_time} - ${stop.end_time})`
-                                  }
-                                >
-                                  <span className="truncate">
-                                    {isTaskCancelled ? `✕ #${stop.task_id}` : `#${stop.task_id}`}
-                                  </span>
-                                </div>
-                              </React.Fragment>
-                            );
-                          })}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {/* Time axis scale (00:00 – 24:00) */}
+          <div className="flex-1 relative w-full">
+            {hourMarks.map((h) => {
+              const pct = (h / 24) * 100;
+              return (
+                <div
+                  key={h}
+                  className="absolute left-0 right-0 transform -translate-y-1/2 flex items-center justify-end pr-1.5 gap-1"
+                  style={{ top: `${pct}%` }}
+                >
+                  <span className="font-mono text-[9px] text-slate-400">
+                    {h < 10 ? `0${h}:00` : `${h}:00`}
+                  </span>
+                  <span className="w-1 h-[1px] bg-slate-600 shrink-0"></span>
+                </div>
+              );
+            })}
           </div>
         </div>
-      )}
+
+        {/* Horizontal Tape of Engineer Columns */}
+        <div className="flex flex-row gap-3 h-full items-stretch">
+          {engineerIds.map((engId, engIdx) => {
+            const eng = dataStore.find_by_id_engineer(engId);
+            if (!eng) return null;
+
+            const stopsCount = eng.tasks?.length || 0;
+            const isSelected = effectiveEngineerId === eng.id;
+            const isUnavailable = eng.status === EngineerStatusEnum.UNAVAILABLE;
+            const isIdle = stopsCount === 0;
+            const hasSelectedTask = effectiveTaskId ? eng.tasks?.includes(effectiveTaskId) : false;
+            const hasSelectedRoad = effectiveRoadId ? eng.roads?.includes(effectiveRoadId) : false;
+
+            const color = ENGINEER_COLORS[engIdx % ENGINEER_COLORS.length];
+            const transportProps = getTransportProps(eng.transport_type);
+            const TransportIcon = transportProps.icon;
+
+            return (
+              <div
+                key={eng.id}
+                className={`w-56 shrink-0 flex flex-col h-full rounded-xl border transition-all duration-200 overflow-visible ${
+                  isSelected
+                    ? 'border-cyan-400 ring-2 ring-cyan-400/50 shadow-2xl bg-cyan-950/20'
+                    : hasSelectedTask || hasSelectedRoad
+                    ? 'border-cyan-500/70 ring-1 ring-cyan-500/40 bg-slate-900 shadow-lg'
+                    : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
+                }`}
+              >
+                {/* Column Header: Sticky Engineer Card */}
+                <div
+                  onClick={() => handleSelectEngineer(eng.id)}
+                  className={`h-[76px] shrink-0 p-2 rounded-t-xl border-b border-slate-800 flex flex-col justify-between cursor-pointer select-none transition-colors ${
+                    isSelected
+                      ? 'bg-cyan-950/40'
+                      : 'bg-slate-950/90 hover:bg-slate-900/90'
+                  }`}
+                  title={`Выбрать инженера: ${eng.name}`}
+                >
+                  {/* Top row: color dot, name, transport */}
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0 border border-slate-700 shadow-sm"
+                        style={{ backgroundColor: isSelected ? '#00f0ff' : color }}
+                      />
+                      <span
+                        className={`font-bold text-xs truncate ${
+                          isSelected ? 'text-cyan-300 font-extrabold' : 'text-slate-100'
+                        }`}
+                      >
+                        {eng.name.replace('Бригада ', '')}
+                      </span>
+                    </div>
+
+                    <div
+                      className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-slate-900 border border-slate-800 shrink-0 ${transportProps.colorClass}`}
+                      title={transportProps.label}
+                    >
+                      <TransportIcon className="w-2.5 h-2.5" />
+                    </div>
+                  </div>
+
+                  {/* Bottom row: status pill and shift time */}
+                  <div className="flex items-center justify-between gap-1 text-[10px]">
+                    {isSelected ? (
+                      <span className="font-extrabold text-[9px] bg-cyan-400 text-slate-950 px-1.5 py-0.5 rounded shadow">
+                        ВЫБРАН
+                      </span>
+                    ) : isUnavailable ? (
+                      <span className="font-bold text-[9px] bg-rose-950/60 text-rose-300 border border-rose-800/60 px-1.5 py-0.5 rounded">
+                        Сход
+                      </span>
+                    ) : isIdle ? (
+                      <span className="font-bold text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">
+                        Резерв
+                      </span>
+                    ) : (
+                      <span className="font-bold text-[9px] bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 px-1.5 py-0.5 rounded">
+                        {stopsCount} {stopsCount === 1 ? 'выезд' : 'выездов'}
+                      </span>
+                    )}
+
+                    <span className="text-slate-400 font-mono text-[9px]">
+                      {eng.shift_start?.time || '09:00'} – {eng.shift_end?.time || '21:00'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Column Body: Vertical Timeline stretching to full height */}
+                <div className="flex-1 min-h-0 p-1 relative overflow-visible">
+                  <Timeline
+                    roadIds={eng.roads}
+                    taskIds={eng.tasks}
+                    shift_start={eng.shift_start}
+                    shift_end={eng.shift_end}
+                    status={eng.status}
+                    selectedTaskId={effectiveTaskId}
+                    selectedRoadId={effectiveRoadId}
+                    engineerPosition={{ lat: eng.position.lat, lon: eng.position.lon }}
+                    engineerName={eng.name}
+                    onSelectTask={handleSelectTask}
+                    onSelectRoad={handleSelectRoad}
+                    onSetFocus={onSetFocus}
+                    onFocusTravelSegment={onFocusTravelSegment}
+                    orientation="vertical"
+                    height="100%"
+                    showHourMarks={false}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 };
