@@ -12,6 +12,8 @@ dependencies = [
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
     "psycopg2-binary>=2.9.9",
+    "numpy>=1.24.0",
+    "ortools>=9.10.0",
 ]
 
 [project.optional-dependencies]

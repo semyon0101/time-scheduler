@@ -8,6 +8,8 @@
 
 Система построена на слоистой сервисной архитектуре с чистым разделением ответственности. Алгоритмический модуль VRPTW-оптимизации и Explainable AI встроен непосредственно в бэкенд, исключая лишние сетевые задержки и накладные расходы:
 
+При оптимизации `backend/Algorithm/solvers/optimizer.py` вызывает однодневный OR-Tools солвер из `backend/Models/VRPTW/` для каждого инженера. После каждого вызова назначенные заявки удаляются из общего списка; остальные предлагаются следующему инженеру. FIFO-план используется только для сравнения метрик, а перепланирование событий выполняет `replanner.py`.
+
 ```
                           [ Веб-браузер / Диспетчер ]
                                        │
@@ -193,7 +195,7 @@ npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT
 ├── backend/
 │   ├── Algorithm/           # Встроенный вычислительный модуль VRPTW и XAI
 │   │   ├── schemas.py       # Pydantic модели оптимизатора
-│   │   ├── solvers/         # baseline.py (FIFO), optimizer.py (2-opt), replanner.py
+│   │   ├── solvers/         # baseline.py (FIFO), optimizer.py (оркестрация VRPTW), replanner.py
 │   │   ├── utils/geo.py     # Матрицы расстояний (haversine) и расчет скорости
 │   │   ├── xai/explainer.py # Движок формирования обоснований
 │   │   └── __init__.py
@@ -213,6 +215,7 @@ npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT
 │   │   └── metrics.py
 │   ├── main.py              # Точка входа FastAPI приложения
 │   ├── Models/              # Pydantic DTO (Settings, Create, Out, StateResponse)
+│   │   └── VRPTW/            # OR-Tools: дневной маршрут одного инженера
 │   ├── Repository/          # Репозитории прямого доступа к таблицам БД
 │   └── Services/            # Сервисы бизнес-логики с DI репозиториев
 ├── data/                    # Геокодированные пресеты Москвы (vostok, yugcenter, etc.)
