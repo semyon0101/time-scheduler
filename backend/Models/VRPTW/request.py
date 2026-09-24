@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from VRPTW.request_types import (
+
+from .request_types import (
     EngineerStatus,
     Position,
     Priority,
@@ -31,5 +32,5 @@ class TaskRequest(BaseModel):
 
 
 class Request(BaseModel):
-    engineers: list[EngineerRequest]
+    engineers: EngineerRequest  # один инженер на день
     tasks: list[TaskRequest]

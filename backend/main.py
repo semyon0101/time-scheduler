@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.config import get_settings
 from backend.Controllers.router import root_router, v1_router
 from backend.Entities.database import create_tables
-from backend.Models.settings import get_settings
 
 settings = get_settings()
 

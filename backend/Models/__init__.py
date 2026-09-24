@@ -12,7 +12,7 @@ from backend.Models.session import (
     ReplanRequestIn,
     SeedRequest,
 )
-from backend.Models.settings import Settings, get_settings
+from backend.Models.settings import Settings
 from backend.Models.task import TaskCreate, TaskOut
 
 __all__ = [
@@ -30,5 +30,4 @@ __all__ = [
     "TaskCreate",
     "TaskOut",
     "UnassignedTaskOut",
-    "get_settings",
 ]

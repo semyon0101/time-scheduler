@@ -1,6 +1,6 @@
 from typing import Any
 
-from backend.Algorithm.schemas import (
+from backend.Models.optimization import (
     ChangeEvent,
     EngineerModel,
     EngineerRoute,
@@ -8,7 +8,7 @@ from backend.Algorithm.schemas import (
     TaskModel,
     UnassignedTask,
 )
-from backend.Algorithm.solvers.optimizer import (
+from backend.Services.routing.feasibility import (
     diagnose_unassigned_reason,
     evaluate_route_feasibility,
 )

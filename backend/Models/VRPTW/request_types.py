@@ -1,29 +1,27 @@
-from enum import StrEnum
+from enum import Enum
 
 from pydantic import BaseModel, Field
 
-# to do: replace all types in /backend to the sames as this:
 
-
-class TransportTypeEnum(StrEnum):
+class TransportTypeEnum(str, Enum):
     PUBLIC = "Общественный транспорт"
     BICYCLE = "Велосипед"
     PEDESTRIAN = "Пешеход"
     CAR = "Автомобиль"
 
 
-class EngineerStatusEnum(StrEnum):
+class EngineerStatusEnum(str, Enum):
     ACTIVE = "active"
     UNAVAILABLE = "unavailable"
     NEW = "new"
 
 
-class PriorityEnum(StrEnum):
+class PriorityEnum(str, Enum):
     NORMAL = "Обычная"
     URGENT = "Срочная"
 
 
-class SkillEnum(StrEnum):
+class SkillEnum(str, Enum):
     LOCKAL = "Локальные работы"
     EMERGENCY = "Аварийные работы"
     CONNECT = "Работы на подключение и дозаказы"
@@ -45,11 +43,11 @@ class Time(BaseModel):
 
 
 class Skill(BaseModel):
-    skill: SkillEnum
+    skill: str
 
 
 class Position(BaseModel):
-    address: str
+    address: str | None = None
     lat: float  # lat coordinate of position on the map
     lon: float  # lon coordinate of position on the map
 

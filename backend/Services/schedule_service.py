@@ -18,6 +18,32 @@ from backend.Services.algorithm_client import (
 from backend.Services.session_service import SessionService
 
 
+def _schedule_records_from_routes(dispatcher_id: str, routes: list[dict]) -> list[ScheduleRecord]:
+    return [
+        ScheduleRecord(
+            dispatcher_id=dispatcher_id,
+            engineer_id=route["engineer_id"],
+            engineer_name=route["engineer_name"],
+            transport_type=route["transport_type"],
+            task_id=stop["task_id"],
+            task_address=stop["address"],
+            district=stop.get("district", ""),
+            lat=stop["lat"],
+            lon=stop["lon"],
+            order=stop["order"],
+            arrival_time=stop["arrival_time"],
+            start_time=stop["start_time"],
+            end_time=stop["end_time"],
+            travel_km=stop["travel_km"],
+            travel_min=stop["travel_min"],
+            required_skill=stop["required_skill"],
+            priority=stop["priority"],
+        )
+        for route in routes
+        for stop in route.get("stops", [])
+    ]
+
+
 class ScheduleService:
     def __init__(
         self,
@@ -80,34 +106,9 @@ class ScheduleService:
         self.task_repo.mark_status_for_dispatcher(dispatcher_id, from_status="new", to_status="active")
         self.engineer_repo.mark_status_for_dispatcher(dispatcher_id, from_status="new", to_status="active")
 
-        new_records = []
-        for route in algo_res.get("optimized_routes", []):
-            eng_id = route["engineer_id"]
-            eng_name = route["engineer_name"]
-            trans = route["transport_type"]
-            for stop in route.get("stops", []):
-                new_records.append(
-                    ScheduleRecord(
-                        dispatcher_id=dispatcher_id,
-                        engineer_id=eng_id,
-                        engineer_name=eng_name,
-                        transport_type=trans,
-                        task_id=stop["task_id"],
-                        task_address=stop["address"],
-                        district=stop.get("district", ""),
-                        lat=stop["lat"],
-                        lon=stop["lon"],
-                        order=stop["order"],
-                        arrival_time=stop["arrival_time"],
-                        start_time=stop["start_time"],
-                        end_time=stop["end_time"],
-                        travel_km=stop["travel_km"],
-                        travel_min=stop["travel_min"],
-                        required_skill=stop["required_skill"],
-                        priority=stop["priority"],
-                    )
-                )
-        self.schedule_repo.bulk_create(new_records)
+        self.schedule_repo.bulk_create(
+            _schedule_records_from_routes(dispatcher_id, algo_res.get("optimized_routes", []))
+        )
 
         opt_m = algo_res.get("optimized_metrics", {})
         base_m = algo_res.get("baseline_metrics", {})
@@ -163,34 +164,7 @@ class ScheduleService:
 
         self.schedule_repo.delete_all_by_dispatcher(dispatcher_id)
 
-        new_records = []
-        for route in algo_res.get("updated_routes", []):
-            eng_id = route["engineer_id"]
-            eng_name = route["engineer_name"]
-            trans = route["transport_type"]
-            for stop in route.get("stops", []):
-                new_records.append(
-                    ScheduleRecord(
-                        dispatcher_id=dispatcher_id,
-                        engineer_id=eng_id,
-                        engineer_name=eng_name,
-                        transport_type=trans,
-                        task_id=stop["task_id"],
-                        task_address=stop["address"],
-                        district=stop.get("district", ""),
-                        lat=stop["lat"],
-                        lon=stop["lon"],
-                        order=stop["order"],
-                        arrival_time=stop["arrival_time"],
-                        start_time=stop["start_time"],
-                        end_time=stop["end_time"],
-                        travel_km=stop["travel_km"],
-                        travel_min=stop["travel_min"],
-                        required_skill=stop["required_skill"],
-                        priority=stop["priority"],
-                    )
-                )
-        self.schedule_repo.bulk_create(new_records)
+        self.schedule_repo.bulk_create(_schedule_records_from_routes(dispatcher_id, algo_res.get("updated_routes", [])))
 
         m = algo_res.get("metrics", {})
         unassigned = algo_res.get("unassigned_tasks", [])

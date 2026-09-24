@@ -1,15 +1,15 @@
 from typing import Any, Optional
 
-from backend.Algorithm.schemas import (
+from backend.Models.optimization import (
     ChangeEvent,
     EngineerModel,
     EngineerRoute,
     TaskModel,
 )
-from backend.Algorithm.solvers.baseline import solve_baseline
-from backend.Algorithm.solvers.optimizer import solve_vrptw
-from backend.Algorithm.solvers.replanner import apply_batch_replanning
-from backend.Algorithm.xai.explainer import generate_explanation
+from backend.Services.explanation import generate_explanation
+from backend.Services.routing.baseline import solve_baseline
+from backend.Services.routing.optimizer import solve_vrptw
+from backend.Services.routing.replanner import apply_batch_replanning
 
 
 class AlgorithmClient:

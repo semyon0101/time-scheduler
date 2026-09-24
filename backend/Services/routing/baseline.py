@@ -1,4 +1,4 @@
-from backend.Algorithm.schemas import (
+from backend.Models.optimization import (
     EngineerModel,
     EngineerRoute,
     PlanMetrics,
@@ -6,7 +6,7 @@ from backend.Algorithm.schemas import (
     TaskModel,
     UnassignedTask,
 )
-from backend.Algorithm.utils.geo import (
+from backend.Services.routing.geo import (
     calc_travel_min,
     haversine_km,
     minutes_to_time,
@@ -80,7 +80,7 @@ def solve_baseline(
             actual_start = max(earliest_arrival, task_w_start)
 
             # 3. Time window & Shift constraints
-            if actual_start <= task_w_end and (actual_start + task_dur) <= state["shift_end_min"]:
+            if (actual_start + task_dur) <= task_w_end and (actual_start + task_dur) <= state["shift_end_min"]:
                 # Fits! Assign to this engineer
                 end_time_min = actual_start + task_dur
                 stop_order = len(routes[eng.id].stops) + 1

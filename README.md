@@ -8,6 +8,8 @@
 
 Система построена на слоистой сервисной архитектуре с чистым разделением ответственности. Алгоритмический модуль VRPTW-оптимизации и Explainable AI встроен непосредственно в бэкенд, исключая лишние сетевые задержки и накладные расходы:
 
+При оптимизации `backend/Services/routing/optimizer.py` вызывает однодневный OR-Tools солвер из `backend/Services/routing/solver.py` для каждого инженера. После каждого вызова назначенные заявки удаляются из общего списка; остальные предлагаются следующему инженеру. DTO запросов и ответов находятся в `backend/Models/VRPTW/`. FIFO-план используется только для сравнения метрик; он и перепланирование используют ту же модель расстояний и времени пути из `routing/geo.py`. Проверка фиксированного порядка визитов для перепланирования находится в `routing/feasibility.py`.
+
 ```
                           [ Веб-браузер / Диспетчер ]
                                        │
@@ -191,12 +193,6 @@ npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT
 
 ```
 ├── backend/
-│   ├── Algorithm/           # Встроенный вычислительный модуль VRPTW и XAI
-│   │   ├── schemas.py       # Pydantic модели оптимизатора
-│   │   ├── solvers/         # baseline.py (FIFO), optimizer.py (2-opt), replanner.py
-│   │   ├── utils/geo.py     # Матрицы расстояний (haversine) и расчет скорости
-│   │   ├── xai/explainer.py # Движок формирования обоснований
-│   │   └── __init__.py
 │   ├── Controllers/         # API контроллеры без uow/auth/idempotency
 │   │   ├── session_controller.py
 │   │   ├── engineer_controller.py
@@ -212,16 +208,23 @@ npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT
 │   │   ├── explanation.py
 │   │   └── metrics.py
 │   ├── main.py              # Точка входа FastAPI приложения
+│   ├── config.py            # Доступ к настройкам приложения
 │   ├── Models/              # Pydantic DTO (Settings, Create, Out, StateResponse)
+│   │   ├── optimization.py  # DTO маршрутов, метрик, перепланирования
+│   │   └── VRPTW/           # DTO запроса и ответа однодневного VRPTW
 │   ├── Repository/          # Репозитории прямого доступа к таблицам БД
-│   └── Services/            # Сервисы бизнес-логики с DI репозиториев
-├── data/                    # Геокодированные пресеты Москвы (vostok, yugcenter, etc.)
+│   └── Services/            # Бизнес-логика с DI репозиториев
+│       ├── routing/         # VRPTW-солвер, оркестрация, FIFO, перепланирование, георасчеты
+│       ├── explanation.py   # Формирование XAI-обоснований
+│       └── algorithm_client.py
+├── data/                    # Пресеты Москвы, исходные CSV и кэш адресов VRPTW
 ├── docs/                    # Архитектурная документация (backend и frontend)
 ├── frontend/                # Клиентский интерфейс (React 18 + Vite)
 ├── scripts/
 │   ├── run_local.sh         # Скрипт старта проекта с валидацией .env
 │   ├── stop_local.sh        # Скрипт остановки сервисов и освобождения портов
 │   └── prepare_seed.py      # Утилита подготовки исходных CSV датасетов
+│   └── vrptw_smoke.py       # Автономный smoke-тест одного инженера
 ├── tests/                   # Набор тестов pytest для CI/CD
 ├── .env                     # Локальный конфигурационный файл
 ├── .env.example             # Шаблон конфигурации переменных окружения
