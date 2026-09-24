@@ -1,4 +1,8 @@
 import json
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -9,6 +13,29 @@ from backend.Services.algorithm_client import AlgorithmClient
 from backend.Services.routing import optimizer
 from backend.Services.routing.baseline import solve_baseline
 from test_cli import find_preset_file
+
+
+def test_offline_cli_imports_without_database_settings(tmp_path):
+    env = os.environ.copy()
+    env.pop("BACKEND_PORT", None)
+    env.pop("DATABASE_URL", None)
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from backend.Services import AlgorithmClient; "
+            "from backend.Services.explanation import generate_explanation; "
+            "from backend.Services.routing.optimizer import solve_vrptw; "
+            "import sys; assert 'backend.Entities.database' not in sys.modules",
+        ],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.asyncio
@@ -56,11 +83,7 @@ async def test_optimization_calls_solver_for_each_engineer_and_assigns_once(monk
     routes = result["optimized_routes"]
     assert [route["engineer_id"] for route in routes] == ["local", "optics"]
     assert [[stop["task_id"] for stop in route["stops"]] for route in routes] == [["a"], ["b"]]
-    baseline_stops = {
-        stop["task_id"]: stop
-        for route in result["baseline_routes"]
-        for stop in route["stops"]
-    }
+    baseline_stops = {stop["task_id"]: stop for route in result["baseline_routes"] for stop in route["stops"]}
     for route in routes:
         stop = route["stops"][0]
         assert stop["order"] == 1
@@ -171,7 +194,9 @@ async def test_real_solver_persists_routes_through_schedule_service(services, re
     state = await services["schedule"].run_optimization(dispatcher_id)
 
     assert {stop.task_id for route in state.schedule for stop in route.stops} == {"task_local", "task_optics"}
-    assert all(stop.start_time == "09:30" and stop.end_time == "10:00" for route in state.schedule for stop in route.stops)
+    assert all(
+        stop.start_time == "09:30" and stop.end_time == "10:00" for route in state.schedule for stop in route.stops
+    )
     assert state.metrics.assigned_count == 2
     assert state.metrics.unassigned_count == 0
     assert len(repos["schedule"].get_all_by_dispatcher(dispatcher_id)) == 2

@@ -1,11 +1,6 @@
-from backend.Services.algorithm_client import (
-    AlgorithmClient,
-    get_default_algorithm_client,
-)
-from backend.Services.engineer_service import EngineerService
-from backend.Services.schedule_service import ScheduleService
-from backend.Services.session_service import SessionService
-from backend.Services.task_service import TaskService
+"""Service layer with lazy public exports for standalone algorithm use."""
+
+from importlib import import_module
 
 __all__ = [
     "AlgorithmClient",
@@ -15,3 +10,21 @@ __all__ = [
     "TaskService",
     "get_default_algorithm_client",
 ]
+
+_MODULES = {
+    "AlgorithmClient": "algorithm_client",
+    "EngineerService": "engineer_service",
+    "ScheduleService": "schedule_service",
+    "SessionService": "session_service",
+    "TaskService": "task_service",
+    "get_default_algorithm_client": "algorithm_client",
+}
+
+
+def __getattr__(name: str):
+    module_name = _MODULES.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(f".{module_name}", __name__), name)
+    globals()[name] = value
+    return value
