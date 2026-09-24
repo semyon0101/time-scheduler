@@ -1,5 +1,5 @@
-from .request import EngineerRequest, Request, TaskRequest
-from .request_types import (
+from backend.Models.VRPTW.request import EngineerRequest, Request, TaskRequest
+from backend.Models.VRPTW.request_types import (
     EngineerStatus,
     EngineerStatusEnum,
     Position,
@@ -11,7 +11,7 @@ from .request_types import (
     TransportType,
     TransportTypeEnum,
 )
-from .solver import solve_engineer_route
+from backend.Services.routing.solver import solve_engineer_route
 
 
 def t(hhmm: str) -> Time:

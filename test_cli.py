@@ -23,17 +23,13 @@ import os
 import sys
 from typing import Any, Dict, List
 
-# Ensure algorithm module is in python path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-ALGO_DIR = os.path.join(CURRENT_DIR, "algorithm")
-if ALGO_DIR not in sys.path:
-    sys.path.insert(0, ALGO_DIR)
 
 try:
-    from backend.Algorithm.schemas import EngineerModel, TaskModel
-    from backend.Algorithm.solvers.baseline import solve_baseline
-    from backend.Algorithm.solvers.optimizer import solve_vrptw
-    from backend.Algorithm.xai.explainer import generate_explanation
+    from backend.Models.optimization import EngineerModel, TaskModel
+    from backend.Services.explanation import generate_explanation
+    from backend.Services.routing.baseline import solve_baseline
+    from backend.Services.routing.optimizer import solve_vrptw
 except ImportError as e:
     print(f"[ERROR] Failed to import algorithm modules: {e}")
     print("Ensure you run this script with the project virtual environment:")
@@ -42,8 +38,8 @@ except ImportError as e:
 
 
 PRESET_ALIASES = {
-    "yugocentr": "yugcenter",
-    "yugcenter": "yugcenter",
+    "yugocentr": "yugocentr",
+    "yugcenter": "yugocentr",
     "yugovostok": "yugovostok",
     "yugo-vostok": "yugovostok",
     "vostok": "vostok",

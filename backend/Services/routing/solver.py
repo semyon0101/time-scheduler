@@ -5,19 +5,11 @@ from __future__ import annotations
 import numpy as np
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
-from .request import EngineerRequest, Request, TaskRequest
-from .request_types import PriorityEnum, TransportTypeEnum
-from .response import EngineerRouteResponse, StopResponse, UnassignedTask
+from backend.Models.VRPTW.request import EngineerRequest, Request, TaskRequest
+from backend.Models.VRPTW.request_types import PriorityEnum, TransportTypeEnum
+from backend.Models.VRPTW.response import EngineerRouteResponse, StopResponse, UnassignedTask
+from backend.Services.routing.geo import calc_travel_min, haversine_km
 
-# км/ч по типу транспорта (упрощённая константа до матрицы с OSM)
-SPEED_KMH: dict[TransportTypeEnum, float] = {
-    TransportTypeEnum.CAR: 40.0,
-    TransportTypeEnum.BICYCLE: 15.0,
-    TransportTypeEnum.PEDESTRIAN: 5.0,
-    TransportTypeEnum.PUBLIC: 20.0,
-}
-
-EARTH_KM = 6371.0
 DISTANCE_SCALE = 1000  # метры в целочисленной стоимости
 DROP_PENALTY_NORMAL = 10_000_000
 DROP_PENALTY_URGENT = 50_000_000
@@ -50,20 +42,22 @@ def _ineligible_reason(engineer: EngineerRequest, task: TaskRequest) -> str | No
 
 
 def _matrices(
-    lats: np.ndarray, lons: np.ndarray, speed_kmh: float
+    lats: np.ndarray, lons: np.ndarray, transport_type: TransportTypeEnum
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Векторный haversine. Возвращает dist_km, dist_m, travel_min (int)."""
-    lat = np.radians(lats)[:, None]
-    lon = np.radians(lons)[:, None]
-    dphi = lat.T - lat
-    dlmb = lon.T - lon
-    a = np.sin(dphi / 2.0) ** 2 + np.cos(lat) * np.cos(lat.T) * np.sin(dlmb / 2.0) ** 2
-    dist_km = EARTH_KM * 2.0 * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
-    np.fill_diagonal(dist_km, 0.0)
+    """Shared distance/travel model; the return to the start is free."""
+    size = len(lats)
+    dist_km = np.zeros((size, size), dtype=np.float64)
+    for i in range(size):
+        for j in range(i + 1, size):
+            distance = haversine_km(lats[i], lons[i], lats[j], lons[j])
+            dist_km[i, j] = dist_km[j, i] = distance
     # открытый маршрут: возврат на склад не стоит времени и километров
     dist_km[:, 0] = 0.0
     dist_m = np.rint(dist_km * DISTANCE_SCALE).astype(np.int64)
-    travel = np.ceil(dist_km / speed_kmh * 60.0).astype(np.int64)
+    travel = np.zeros((size, size), dtype=np.int64)
+    for i in range(size):
+        for j in range(1, size):
+            travel[i, j] = calc_travel_min(dist_km[i, j], transport_type)
     return dist_km, dist_m, travel
 
 
@@ -89,7 +83,6 @@ def solve_engineer_route(request: Request) -> EngineerRouteResponse:
             unassigned=unassigned,
         )
 
-    speed = SPEED_KMH[engineer.transport_type.transport_type]
     n = len(eligible)
     lats = np.empty(n + 1, dtype=np.float64)
     lons = np.empty(n + 1, dtype=np.float64)
@@ -99,7 +92,7 @@ def solve_engineer_route(request: Request) -> EngineerRouteResponse:
         lats[i] = t.pos.lat
         lons[i] = t.pos.lon
 
-    dist_km, dist_m, travel_min = _matrices(lats, lons, speed)
+    dist_km, dist_m, travel_min = _matrices(lats, lons, engineer.transport_type.transport_type)
     durations = np.empty(n + 1, dtype=np.int64)
     durations[0] = 0
     for i, t in enumerate(eligible, start=1):

@@ -2,8 +2,6 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-# to do: replace all types in /backend to the sames as this:
-
 
 class TransportTypeEnum(str, Enum):
     PUBLIC = "Общественный транспорт"

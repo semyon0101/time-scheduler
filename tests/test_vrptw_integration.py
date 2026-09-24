@@ -2,10 +2,13 @@ import json
 
 import pytest
 
-from backend.Algorithm.solvers import optimizer
 from backend.Entities.engineer import Engineer
 from backend.Entities.task import Task
+from backend.Models.optimization import EngineerModel, TaskModel
 from backend.Services.algorithm_client import AlgorithmClient
+from backend.Services.routing import optimizer
+from backend.Services.routing.baseline import solve_baseline
+from test_cli import find_preset_file
 
 
 @pytest.mark.asyncio
@@ -53,6 +56,11 @@ async def test_optimization_calls_solver_for_each_engineer_and_assigns_once(monk
     routes = result["optimized_routes"]
     assert [route["engineer_id"] for route in routes] == ["local", "optics"]
     assert [[stop["task_id"] for stop in route["stops"]] for route in routes] == [["a"], ["b"]]
+    baseline_stops = {
+        stop["task_id"]: stop
+        for route in result["baseline_routes"]
+        for stop in route["stops"]
+    }
     for route in routes:
         stop = route["stops"][0]
         assert stop["order"] == 1
@@ -61,14 +69,14 @@ async def test_optimization_calls_solver_for_each_engineer_and_assigns_once(monk
         assert stop["travel_min"] > 0
         assert stop["travel_km"] > 0
         assert route["total_distance_km"] == stop["travel_km"]
+        assert stop["travel_min"] == baseline_stops[stop["task_id"]]["travel_min"]
+        assert abs(stop["travel_km"] - baseline_stops[stop["task_id"]]["travel_km"]) < 0.001
     assert [task["task_id"] for task in result["unassigned_tasks"]] == ["missing"]
     assert result["optimized_metrics"]["assigned_tasks_count"] == 2
     assert result["optimized_metrics"]["unassigned_tasks_count"] == 1
 
 
 def test_task_rejected_by_first_engineer_is_available_to_next():
-    from backend.Algorithm.schemas import EngineerModel, TaskModel
-
     engineers = [
         EngineerModel(
             id=engineer_id,
@@ -96,6 +104,30 @@ def test_task_rejected_by_first_engineer_is_available_to_next():
     assert routes[1].stops[0].task_id == task.id
     assert metrics.assigned_tasks_count == 1
     assert unassigned == []
+
+
+def test_fifo_respects_end_of_time_window():
+    engineer = EngineerModel(id="local", name="local", start_lat=55.75, start_lon=37.62, skills=["Локальные работы"])
+    task = TaskModel(
+        id="too_long",
+        address="Москва",
+        lat=55.75,
+        lon=37.62,
+        window_start="09:00",
+        window_end="09:20",
+        duration_min=30,
+    )
+
+    routes, metrics, unassigned = solve_baseline([engineer], [task])
+
+    assert routes[0].stops == []
+    assert metrics.unassigned_tasks_count == 1
+    assert unassigned[0].task_id == task.id
+
+
+def test_preset_alias_uses_single_dataset():
+    assert find_preset_file("yugcenter") == find_preset_file("yugocentr")
+    assert find_preset_file("yugcenter").endswith("yugocentr.json")
 
 
 @pytest.mark.asyncio

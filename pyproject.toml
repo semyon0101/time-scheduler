@@ -46,8 +46,6 @@ exclude = [
     "venv",
     "data",
     "dist",
-    "backend/app",
-    "algorithm",
     "scripts",
 ]
 

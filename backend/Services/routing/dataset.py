@@ -6,8 +6,8 @@ import csv
 import json
 from pathlib import Path
 
-from .request import EngineerRequest, Request, TaskRequest
-from .request_types import (
+from backend.Models.VRPTW.request import EngineerRequest, Request, TaskRequest
+from backend.Models.VRPTW.request_types import (
     EngineerStatus,
     EngineerStatusEnum,
     Position,
@@ -24,7 +24,9 @@ ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = ROOT / "data" / "Обезличивание"
 if not DATA_DIR.is_dir():
     DATA_DIR = Path.cwd() / "data" / "Обезличивание"
-CACHE_PATH = Path(__file__).with_name("address_cache.json")
+CACHE_PATH = ROOT / "data" / "vrptw_address_cache.json"
+if not CACHE_PATH.is_file():
+    CACHE_PATH = Path.cwd() / "data" / "vrptw_address_cache.json"
 
 # Тип заявки HD -> навык из справочника ТЗ
 HD_SKILL: dict[str, SkillEnum] = {

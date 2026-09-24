@@ -2,7 +2,7 @@
 
 ## 1. Обзор архитектуры
 
-Бэкенд спроектирован по канонической слоистой архитектуре (Layered Architecture). Алгоритмический модуль оптимизации расписаний (VRPTW) и объяснимого ИИ (XAI) встроен непосредственно в состав бэкенда (`backend/Algorithm/`), исключая необходимость в отдельном сетевом микросервисе и порте. В качестве основной СУБД используется **PostgreSQL**.
+Бэкенд спроектирован по канонической слоистой архитектуре (Layered Architecture). Оптимизация расписаний (VRPTW) и генерация объяснений (XAI) выполняются внутри `backend/Services/`, без отдельного сетевого микросервиса и порта. В `backend/Models/` находятся только DTO и схемы настроек. В качестве основной СУБД используется **PostgreSQL**.
 
 ```
        ┌────────────────────────────────────────┐
@@ -19,8 +19,8 @@
               │                          │
               ▼                          ▼
    ┌──────────────────────┐   ┌──────────────────────┐
-   │      Repository      │   │   In-process VRPTW   │ <─── Встроенный оптимизатор
-   │(backend/Repository/) │   │ (backend/Algorithm/) │      и генератор XAI
+    │      Repository      │   │   In-process VRPTW   │ <─── Сервисы маршрутизации
+    │(backend/Repository/) │   │ (Services/routing/)  │      и объяснений
    └──────────┬───────────┘   └──────────────────────┘
               │
               ▼
@@ -50,7 +50,7 @@
 ### 2.2. Services (`backend/Services/`)
 - Содержат всю ключевую бизнес-логику:
   - Проверка бизнес-правил (необратимость перевода инженера в оффлайн и автоматическое перемещение его заявок в нераспределенные).
-  - Вызов встроенного движка оптимизации VRPTW и генерации объяснений без сетевого оверхеда.
+  - Оркестрация инженеров и вызов однодневного VRPTW-солвера (`routing/optimizer.py`, `routing/solver.py`), перепланирование (`routing/replanner.py`) и генерация объяснений (`explanation.py`) без сетевого оверхеда.
   - Сборка агрегированного DTO состояния системы (`StateResponse`).
 - **Все зависимости к БД инжектируются в конструктор `__init__`** в виде репозиториев (`EngineerRepository`, `TaskRepository`, etc.).
 
@@ -79,7 +79,9 @@
 - DTO (Data Transfer Objects) и схемы Pydantic:
   - Схемы запросов (`EngineerCreate`, `TaskCreate`, `SeedRequest`, `ReplanRequestIn`).
   - Схемы ответов (`StateResponse`, `EngineerOut`, `TaskOut`, `MetricsOut`, `ExplanationOut`).
+  - DTO алгоритма (`optimization.py`) и VRPTW (`VRPTW/request.py`, `VRPTW/response.py`, `VRPTW/request_types.py`).
   - DTO настроек `Settings` (`backend/Models/settings.py`), обязательные поля `port` (из `BACKEND_PORT`) и `database_url` (из `DATABASE_URL`) без дефолтов.
+  - Получение настроек вынесено в `backend/config.py`.
 
 ---
 

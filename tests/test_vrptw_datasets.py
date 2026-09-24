@@ -3,8 +3,8 @@
 import time
 import unittest
 
-from .dataset import SYNTHETIC_FILES, load_synthetic_request
-from .solver import solve_engineer_route
+from backend.Services.routing.dataset import SYNTHETIC_FILES, load_synthetic_request
+from backend.Services.routing.solver import solve_engineer_route
 
 
 class SyntheticCsvTests(unittest.TestCase):

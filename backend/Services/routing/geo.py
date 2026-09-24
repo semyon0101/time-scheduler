@@ -1,7 +1,7 @@
 import math
 
-# Average city speeds in km/h including traffic/stops
-SPEEDS_KMH = {"Автомобиль": 35.0, "Общественный транспорт": 20.0, "Велосипед": 15.0, "Пешеход": 5.0}
+# Shared travel model for FIFO, replanning and the OR-Tools solver.
+SPEEDS_KMH = {"Автомобиль": 40.0, "Общественный транспорт": 20.0, "Велосипед": 15.0, "Пешеход": 5.0}
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -11,19 +11,13 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dlon = math.radians(lon2 - lon1)
     a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    distance = r * c
-    # Real road distance is roughly 1.3x Euclidean/Haversine in city grid
-    return round(distance * 1.3, 2)
+    return r * c
 
 
 def calc_travel_min(distance_km: float, transport_type: str) -> int:
     """Calculates travel time in minutes based on distance and transport speed."""
     speed = SPEEDS_KMH.get(transport_type, 30.0)
-    travel_hours = distance_km / speed
-    minutes = round(travel_hours * 60)
-    # Add small parking/access buffer
-    buffer_min = 5 if transport_type == "Автомобиль" else 3
-    return max(5, minutes + buffer_min)
+    return math.ceil(distance_km / speed * 60)
 
 
 def time_to_minutes(hh_mm: str) -> int:
