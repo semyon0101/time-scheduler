@@ -106,7 +106,9 @@ class ScheduleService:
         self.task_repo.mark_status_for_dispatcher(dispatcher_id, from_status="new", to_status="active")
         self.engineer_repo.mark_status_for_dispatcher(dispatcher_id, from_status="new", to_status="active")
 
-        self.schedule_repo.bulk_create(_schedule_records_from_routes(dispatcher_id, algo_res.get("optimized_routes", [])))
+        self.schedule_repo.bulk_create(
+            _schedule_records_from_routes(dispatcher_id, algo_res.get("optimized_routes", []))
+        )
 
         opt_m = algo_res.get("optimized_metrics", {})
         base_m = algo_res.get("baseline_metrics", {})

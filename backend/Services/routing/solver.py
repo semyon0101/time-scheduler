@@ -132,11 +132,7 @@ def solve_engineer_route(request: Request) -> EngineerRouteResponse:
 
     for node in range(1, n + 1):
         task = eligible[node - 1]
-        penalty = (
-            DROP_PENALTY_URGENT
-            if task.priority.priority == PriorityEnum.URGENT
-            else DROP_PENALTY_NORMAL
-        )
+        penalty = DROP_PENALTY_URGENT if task.priority.priority == PriorityEnum.URGENT else DROP_PENALTY_NORMAL
         routing.AddDisjunction([manager.NodeToIndex(node)], penalty)
 
     params = pywrapcp.DefaultRoutingSearchParameters()
