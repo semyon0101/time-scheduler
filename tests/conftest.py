@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from backend.config import sqlalchemy_url
 from backend.Controllers.router import root_router, v1_router
 from backend.Dependencies import get_algorithm_client
 from backend.Entities.database import Base, get_db
@@ -70,7 +71,7 @@ def _resolve_database_url() -> str:
 @pytest.fixture(scope="function")
 def test_db() -> Generator[Session, None, None]:
     db_url = _resolve_database_url()
-    engine = create_engine(db_url, pool_pre_ping=True)
+    engine = create_engine(sqlalchemy_url(db_url), pool_pre_ping=True)
     Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = TestingSessionLocal()

@@ -22,6 +22,7 @@ export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [state, setState] = useState<StateResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
 
   // Selection state
@@ -58,11 +59,13 @@ export const DashboardPage: React.FC = () => {
 
   const loadSession = async () => {
     setLoading(true);
+    setConnectionError(null);
     try {
       const data = await api.initSession();
       setState(data);
     } catch (err) {
       console.error('Failed to init session:', err);
+      setConnectionError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -235,8 +238,20 @@ export const DashboardPage: React.FC = () => {
         isHelpActive={activeTab === 'guide' && !selectedEngineerId && !selectedTaskId && !createPanelType}
       />
 
+      {connectionError && (
+        <div role="alert" className="mx-3 mt-3 rounded-lg border border-rose-500 bg-rose-950 p-3 text-sm text-rose-100">
+          Не удалось подключиться к API: {connectionError}
+          <button type="button" onClick={loadSession} className="ml-3 font-bold underline">Повторить</button>
+        </div>
+      )}
+
       {/* Main Container */}
       <main className="flex-1 p-2 md:p-3.5 space-y-2.5 flex flex-col overflow-hidden max-w-[1920px] mx-auto w-full">
+        {loading && (
+          <div role="status" className="rounded-lg bg-slate-800 px-3 py-2 text-sm text-slate-200">
+            Загружаем данные и строим маршруты. Первый запуск может занять около 30 секунд.
+          </div>
+        )}
         {/* KPI Metrics Hero Bar (with Skeleton loading) */}
         <MetricsCard
           metrics={state?.metrics}

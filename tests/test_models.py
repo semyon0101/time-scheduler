@@ -1,3 +1,4 @@
+from backend.config import sqlalchemy_url
 from backend.Models.engineer import EngineerCreate, EngineerOut
 from backend.Models.schedule import MetricsOut, StateResponse
 from backend.Models.session import ChangeEventIn, ReplanRequestIn
@@ -10,6 +11,11 @@ def test_settings_defaults():
     assert s.port == 8000
     assert s.host == "0.0.0.0"
     assert len(s.cors_origins) > 0
+
+
+def test_postgresql_driver_is_explicit():
+    assert sqlalchemy_url("postgresql://postgres:secret@localhost:5432/scheduler_db").drivername == "postgresql+psycopg2"
+    assert sqlalchemy_url("sqlite:///:memory:").drivername == "sqlite"
 
 
 def test_engineer_models():

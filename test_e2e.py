@@ -9,9 +9,7 @@ import httpx
 def main():
     print("=== STARTING COMPREHENSIVE END-TO-END VERIFICATION ===")
     root_dir = os.path.dirname(os.path.abspath(__file__))
-    venv_python = os.path.join(root_dir, "venv", "bin", "python")
-    if not os.path.exists(venv_python):
-        venv_python = sys.executable
+    venv_python = sys.executable
 
     env_file = os.path.join(root_dir, ".env")
     if os.path.exists(env_file):

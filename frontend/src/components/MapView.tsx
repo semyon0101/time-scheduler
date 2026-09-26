@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { Feature, FeatureCollection, LineString } from 'geojson';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -71,41 +71,49 @@ export const MapView: React.FC<MapViewProps> = ({
   const isMapLoadedRef = useRef(false);
   const hasInitiallyFittedRef = useRef(false);
   const lastDatasetKeyRef = useRef('');
+  const [mapError, setMapError] = useState(false);
 
   // Initialize MapLibre GL map with CARTO Voyager raster tiles
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: {
-        version: 8,
-        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-        sources: {
-          'osm-tiles': {
-            type: 'raster',
-            tiles: [
-              'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
-            ],
-            tileSize: 256,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          }
+    let map: maplibregl.Map;
+    try {
+      map = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: {
+          version: 8,
+          glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+          sources: {
+            'osm-tiles': {
+              type: 'raster',
+              tiles: [
+                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+              ],
+              tileSize: 256,
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }
+          },
+          layers: [
+            {
+              id: 'osm-tiles-layer',
+              type: 'raster',
+              source: 'osm-tiles',
+              minzoom: 0,
+              maxzoom: 19
+            }
+          ]
         },
-        layers: [
-          {
-            id: 'osm-tiles-layer',
-            type: 'raster',
-            source: 'osm-tiles',
-            minzoom: 0,
-            maxzoom: 19
-          }
-        ]
-      },
-      center: [37.6176, 55.7558], // Moscow center [lon, lat]
-      zoom: 11
-    });
+        center: [37.6176, 55.7558], // Moscow center [lon, lat]
+        zoom: 11
+      });
+    } catch (error) {
+      console.error('Failed to initialize map:', error);
+      setMapError(true);
+      return;
+    }
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
@@ -752,6 +760,11 @@ export const MapView: React.FC<MapViewProps> = ({
   return (
     <div className="w-full h-full relative overflow-hidden bg-slate-950">
       <div ref={mapContainerRef} className="w-full h-full" />
+      {mapError && (
+        <div role="alert" className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-slate-200">
+          Карта недоступна: браузеру необходим WebGL2. Списки инженеров, заявок и расписание остаются доступны.
+        </div>
+      )}
     </div>
   );
 };

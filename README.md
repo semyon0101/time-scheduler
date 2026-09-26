@@ -87,6 +87,11 @@ docker compose up --build -d
 # Шаг 4: Проверить статус работающих сервисов
 docker compose ps
 
+# Проверить API напрямую и через прокси фронтенда
+source .env
+curl http://localhost:$BACKEND_PORT/health
+curl -i http://localhost:$FRONTEND_PORT/api/v1/health
+
 # Шаг 5: Просмотр логов в реальном времени (при необходимости)
 docker compose logs -f
 
@@ -123,6 +128,8 @@ docker compose up db -d
 # (Или через корневой алиас: ./stop_local.sh)
 ```
 
+При первом открытии `/dashboard` сервер сразу строит маршруты для демонстрационного набора: ответ `/session/init` может занять около 25–30 секунд. Пока запрос выполняется, интерфейс показывает статус загрузки; если API недоступен, появится сообщение с кнопкой повтора.
+
 ---
 
 ### Способ 3: Ручной покомпонентный запуск (в разных терминалах)
@@ -134,7 +141,7 @@ docker compose up db
 
 **Терминал 2: Backend API**
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 source .env
 uvicorn main:app --app-dir backend --host 0.0.0.0 --port $BACKEND_PORT --reload
 ```
@@ -143,7 +150,7 @@ uvicorn main:app --app-dir backend --host 0.0.0.0 --port $BACKEND_PORT --reload
 ```bash
 cd frontend
 source ../.env
-npm run dev -- --host 0.0.0.0 --port $FRONTEND_PORT
+FRONTEND_PORT="$FRONTEND_PORT" VITE_PROXY_TARGET="http://127.0.0.1:$BACKEND_PORT" npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT"
 ```
 
 ---
