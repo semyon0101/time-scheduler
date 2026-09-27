@@ -17,6 +17,7 @@ from backend.Repository.dispatcher_repository import DispatcherRepository
 from backend.Repository.engineer_repository import EngineerRepository
 from backend.Repository.explanation_repository import ExplanationRepository
 from backend.Repository.metrics_repository import MetricsRepository
+from backend.Repository.replan_repository import ReplanRepository
 from backend.Repository.schedule_repository import ScheduleRepository
 from backend.Repository.task_repository import TaskRepository
 from backend.Services.algorithm_client import AlgorithmClient
@@ -166,6 +167,7 @@ def repos(test_db: Session):
         "schedule": ScheduleRepository(test_db),
         "explanation": ExplanationRepository(test_db),
         "metrics": MetricsRepository(test_db),
+        "replan": ReplanRepository(test_db),
     }
 
 
@@ -179,6 +181,16 @@ def services(repos, mock_algo_client):
         explanation_repo=repos["explanation"],
         metrics_repo=repos["metrics"],
     )
+    schedule_service = ScheduleService(
+        engineer_repo=repos["engineer"],
+        task_repo=repos["task"],
+        schedule_repo=repos["schedule"],
+        explanation_repo=repos["explanation"],
+        metrics_repo=repos["metrics"],
+        replan_repo=repos["replan"],
+        session_service=session_service,
+        algo_client=mock_algo_client,
+    )
     engineer_service = EngineerService(
         engineer_repo=repos["engineer"],
         schedule_repo=repos["schedule"],
@@ -186,6 +198,7 @@ def services(repos, mock_algo_client):
         task_repo=repos["task"],
         session_service=session_service,
         algo_client=mock_algo_client,
+        schedule_service=schedule_service,
     )
     task_service = TaskService(
         task_repo=repos["task"],
@@ -194,15 +207,7 @@ def services(repos, mock_algo_client):
         engineer_repo=repos["engineer"],
         session_service=session_service,
         algo_client=mock_algo_client,
-    )
-    schedule_service = ScheduleService(
-        engineer_repo=repos["engineer"],
-        task_repo=repos["task"],
-        schedule_repo=repos["schedule"],
-        explanation_repo=repos["explanation"],
-        metrics_repo=repos["metrics"],
-        session_service=session_service,
-        algo_client=mock_algo_client,
+        schedule_service=schedule_service,
     )
     return {
         "session": session_service,

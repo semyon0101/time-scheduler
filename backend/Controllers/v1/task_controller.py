@@ -35,7 +35,7 @@ async def cancel_task(
     disp_id: Annotated[str, Depends(get_current_dispatcher_id)],
     service: Annotated[TaskService, Depends(get_task_service)],
 ) -> StateResponse:
-    return service.cancel_task(disp_id, task_id)
+    return await service.cancel_task(disp_id, task_id)
 
 
 @router.get("/{task_id}/explanation", response_model=ExplanationOut)

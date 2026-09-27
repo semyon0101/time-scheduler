@@ -1,14 +1,20 @@
 import json
 import uuid
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from fastapi import HTTPException
 
 from backend.Entities.metrics import PlanMetricsRecord
 from backend.Entities.schedule import ScheduleRecord
 from backend.Entities.task import Task
+from backend.Models.optimization import PlanMetrics, UnassignedTask
 from backend.Models.schedule import StateResponse
 from backend.Models.session import ChangeEventIn
 from backend.Repository.engineer_repository import EngineerRepository
 from backend.Repository.explanation_repository import ExplanationRepository
 from backend.Repository.metrics_repository import MetricsRepository
+from backend.Repository.replan_repository import ReplanRepository
 from backend.Repository.schedule_repository import ScheduleRepository
 from backend.Repository.task_repository import TaskRepository
 from backend.Services.algorithm_client import (
@@ -44,6 +50,10 @@ def _schedule_records_from_routes(dispatcher_id: str, routes: list[dict]) -> lis
     ]
 
 
+def _current_event_timestamp() -> str:
+    return datetime.now(ZoneInfo("Europe/Moscow")).isoformat(timespec="seconds")
+
+
 class ScheduleService:
     def __init__(
         self,
@@ -53,6 +63,7 @@ class ScheduleService:
         explanation_repo: ExplanationRepository,
         metrics_repo: MetricsRepository,
         session_service: SessionService,
+        replan_repo: ReplanRepository,
         algo_client: AlgorithmClient | None = None,
     ):
         self.engineer_repo = engineer_repo
@@ -61,6 +72,7 @@ class ScheduleService:
         self.explanation_repo = explanation_repo
         self.metrics_repo = metrics_repo
         self.session_service = session_service
+        self.replan_repo = replan_repo
         self.algo_client = algo_client or get_default_algorithm_client()
 
     async def run_optimization(self, dispatcher_id: str) -> StateResponse:
@@ -131,53 +143,80 @@ class ScheduleService:
         return self.session_service.build_state_response(dispatcher_id)
 
     async def replan(self, dispatcher_id: str, events: list[ChangeEventIn]) -> StateResponse:
-        for ev in events:
-            if ev.event_type == "ENGINEER_UNAVAILABLE" and ev.engineer_id:
-                self.engineer_repo.set_status(dispatcher_id, ev.engineer_id, "unavailable")
-            elif ev.event_type == "CANCEL_TASK" and ev.task_id:
-                self.task_repo.set_status(dispatcher_id, ev.task_id, "cancelled")
-            elif ev.event_type == "URGENT_TASK" and ev.task:
-                task_id = ev.task.id or f"urgent_{uuid.uuid4().hex[:6]}"
-                new_task = Task(
-                    id=task_id,
-                    dispatcher_id=dispatcher_id,
-                    address=ev.task.address,
-                    district=ev.task.district or "",
-                    lat=ev.task.lat,
-                    lon=ev.task.lon,
-                    window_start=ev.task.window_start,
-                    window_end=ev.task.window_end,
-                    duration_min=ev.task.duration_min,
-                    required_skill=ev.task.required_skill,
-                    required_transport=ev.task.required_transport,
-                    priority="Срочная",
-                    status="active",
-                )
-                self.task_repo.create(new_task)
-
+        if not events:
+            return self.session_service.build_state_response(dispatcher_id)
+        # The existing schedule and task records must be read before any status changes.
         state = self.session_service.build_state_response(dispatcher_id)
         current_schedule_payload = [r.model_dump() for r in state.schedule]
-        engineers_payload = [e.model_dump() for e in state.engineers if e.status != "unavailable"]
-        events_payload = [ev.model_dump() for ev in events]
+        engineers_payload = [e.model_dump() for e in state.engineers]
+        tasks_payload = [t.model_dump() for t in state.tasks if t.status != "cancelled"]
+        batch_time = _current_event_timestamp()
+        events_payload = []
+        for event in events:
+            payload = event.model_dump()
+            payload["timestamp"] = payload["timestamp"] or batch_time
+            if event.event_type in {"URGENT_TASK", "REGULAR_TASK"} and payload["task"]:
+                payload["task"]["id"] = payload["task"]["id"] or f"task_{uuid.uuid4().hex[:8]}"
+                if event.event_type == "URGENT_TASK":
+                    payload["task"]["priority"] = "Срочная"
+            events_payload.append(payload)
 
-        algo_res = await self.algo_client.call_replan(current_schedule_payload, engineers_payload, events_payload)
+        try:
+            algo_res = await self.algo_client.call_replan(
+                current_schedule_payload, engineers_payload, events_payload, tasks_payload
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-        self.schedule_repo.delete_all_by_dispatcher(dispatcher_id)
-
-        self.schedule_repo.bulk_create(_schedule_records_from_routes(dispatcher_id, algo_res.get("updated_routes", [])))
-
-        m = algo_res.get("metrics", {})
-        unassigned = algo_res.get("unassigned_tasks", [])
-        metrics_rec = self.metrics_repo.get_by_dispatcher(dispatcher_id)
-        if metrics_rec:
-            metrics_rec.optimized_engineers = m.get("total_engineers_used", 0)
-            metrics_rec.optimized_mileage = m.get("total_mileage_km", 0.0)
-            metrics_rec.assigned_count = m.get("assigned_tasks_count", 0)
-            metrics_rec.unassigned_count = m.get("unassigned_tasks_count", 0)
-            metrics_rec.unassigned_json = json.dumps(unassigned, ensure_ascii=False)
-            self.metrics_repo.upsert(metrics_rec)
-
-        self.task_repo.mark_status_for_dispatcher(dispatcher_id, from_status="new", to_status="active")
-        self.engineer_repo.mark_status_for_dispatcher(dispatcher_id, from_status="new", to_status="active")
+        records = _schedule_records_from_routes(dispatcher_id, algo_res["updated_routes"])
+        assigned_ids = {record.task_id for record in records}
+        cancelled_ids = {event["task_id"] for event in events_payload if event["event_type"] == "CANCEL_TASK"}
+        unavailable_ids = {
+            event["engineer_id"] for event in events_payload if event["event_type"] == "ENGINEER_UNAVAILABLE"
+        }
+        new_tasks = []
+        for event in events_payload:
+            data = event["task"] if event["event_type"] in {"URGENT_TASK", "REGULAR_TASK"} else None
+            if data:
+                new_tasks.append(
+                    Task(
+                        id=data["id"],
+                        dispatcher_id=dispatcher_id,
+                        address=data["address"],
+                        district=data.get("district") or "",
+                        lat=data["lat"],
+                        lon=data["lon"],
+                        window_start=data["window_start"],
+                        window_end=data["window_end"],
+                        duration_min=data["duration_min"],
+                        required_skill=data["required_skill"],
+                        required_transport=data.get("required_transport"),
+                        priority=data["priority"],
+                        status="active" if data["id"] in assigned_ids else "new",
+                    )
+                )
+        unassigned = [
+            UnassignedTask(**item) for item in algo_res["unassigned_tasks"] if item["task_id"] not in cancelled_ids
+        ]
+        published_stops = {route["engineer_id"]: route["stops"] for route in current_schedule_payload}
+        updated_stops = {route["engineer_id"]: route.get("stops", []) for route in algo_res["updated_routes"]}
+        replace_schedule = any(
+            updated_stops.get(engineer_id, []) != published_stops.get(engineer_id, [])
+            for engineer_id in published_stops.keys() | updated_stops.keys()
+        )
+        # The stored FIFO reference describes the original inputs, not this event batch.
+        metrics = PlanMetrics(**algo_res["metrics"])
+        metrics.mileage_reduction_pct = None
+        metrics.engineers_reduction_pct = None
+        self.replan_repo.save(
+            dispatcher_id,
+            new_tasks=new_tasks,
+            cancelled_ids=cancelled_ids,
+            unavailable_ids=unavailable_ids,
+            schedule_records=records,
+            replace_schedule=replace_schedule,
+            metrics=metrics,
+            unassigned=unassigned,
+        )
 
         return self.session_service.build_state_response(dispatcher_id)

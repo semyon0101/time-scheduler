@@ -147,6 +147,7 @@ class SessionService:
         engineers = self.engineer_repo.get_all_by_dispatcher(dispatcher_id)
         tasks = self.task_repo.get_all_by_dispatcher(dispatcher_id)
         schedule_records = self.schedule_repo.get_all_by_dispatcher(dispatcher_id)
+        task_durations = {task.id: task.duration_min for task in tasks}
         metrics_rec = self.metrics_repo.get_by_dispatcher(dispatcher_id)
 
         routes_dict = {}
@@ -189,7 +190,7 @@ class SessionService:
                     routes_dict[sr.engineer_id]["total_distance_km"] + sr.travel_km, 2
                 )
                 routes_dict[sr.engineer_id]["total_travel_min"] += sr.travel_min
-                routes_dict[sr.engineer_id]["total_work_min"] += 45
+                routes_dict[sr.engineer_id]["total_work_min"] += task_durations.get(sr.task_id, 0)
 
         routes_out = [EngineerRouteOut(**r) for r in routes_dict.values()]
 

@@ -49,12 +49,16 @@ class AlgorithmClient:
         current_schedule: list[dict[str, Any]],
         engineers: list[dict[str, Any]],
         events: list[dict[str, Any]],
+        tasks: list[dict[str, Any]],
     ) -> dict[str, Any]:
         sched_models = [EngineerRoute(**s) for s in current_schedule]
         eng_models = [EngineerModel(**e) for e in engineers]
         event_models = [ChangeEvent(**ev) for ev in events]
+        task_models = [TaskModel(**t) for t in tasks]
 
-        updated_routes, metrics, unassigned, diff = apply_batch_replanning(sched_models, eng_models, event_models)
+        updated_routes, metrics, unassigned, diff = apply_batch_replanning(
+            sched_models, eng_models, event_models, task_models
+        )
         return {
             "updated_routes": [r.model_dump() for r in updated_routes],
             "unassigned_tasks": [u.model_dump() for u in unassigned],

@@ -62,7 +62,7 @@ async def test_engineer_service(services):
     assert exp_cached.cached is True
 
     # Toggle status offline
-    state_after_toggle = eng_svc.toggle_status(disp.id, created.id)
+    state_after_toggle = await eng_svc.toggle_status(disp.id, created.id)
     eng_obj = next(e for e in state_after_toggle.engineers if e.id == created.id)
     assert eng_obj.status == "unavailable"
 
@@ -99,7 +99,7 @@ async def test_task_service(services):
     assert exp_cached.cached is True
 
     # Cancel task
-    state_after_cancel = task_svc.cancel_task(disp.id, created.id)
+    state_after_cancel = await task_svc.cancel_task(disp.id, created.id)
     canc_task = next(t for t in state_after_cancel.tasks if t.id == created.id)
     assert canc_task.status == "cancelled"
 

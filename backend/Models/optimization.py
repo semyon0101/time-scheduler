@@ -12,6 +12,7 @@ class EngineerModel(BaseModel):
     shift_end: str = "22:00"
     skills: list[str] = Field(default_factory=list)
     transport_type: str = "Автомобиль"
+    status: str = "active"
 
 
 class TaskModel(BaseModel):
@@ -89,7 +90,7 @@ class OptimizeResponse(BaseModel):
 
 
 class ChangeEvent(BaseModel):
-    event_type: str  # "URGENT_TASK" | "CANCEL_TASK" | "ENGINEER_UNAVAILABLE"
+    event_type: str  # "REGULAR_TASK" | "URGENT_TASK" | "CANCEL_TASK" | "ENGINEER_UNAVAILABLE"
     timestamp: str | None = None
     task: TaskModel | None = None
     task_id: str | None = None
@@ -99,6 +100,7 @@ class ChangeEvent(BaseModel):
 class ReplanRequest(BaseModel):
     current_schedule: list[EngineerRoute]
     engineers: list[EngineerModel]
+    tasks: list[TaskModel]
     events: list[ChangeEvent]
 
 

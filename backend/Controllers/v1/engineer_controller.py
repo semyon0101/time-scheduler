@@ -35,7 +35,7 @@ async def toggle_engineer_status(
     disp_id: Annotated[str, Depends(get_current_dispatcher_id)],
     service: Annotated[EngineerService, Depends(get_engineer_service)],
 ) -> StateResponse:
-    return service.toggle_status(disp_id, engineer_id)
+    return await service.toggle_status(disp_id, engineer_id)
 
 
 @router.get("/{engineer_id}/explanation", response_model=ExplanationOut)

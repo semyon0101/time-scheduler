@@ -7,7 +7,7 @@ from backend.Entities.engineer import Engineer
 from backend.Entities.explanation import ExplanationCache
 from backend.Models.engineer import EngineerCreate, EngineerOut
 from backend.Models.schedule import StateResponse
-from backend.Models.session import ExplanationOut
+from backend.Models.session import ChangeEventIn, ExplanationOut
 from backend.Repository.engineer_repository import EngineerRepository
 from backend.Repository.explanation_repository import ExplanationRepository
 from backend.Repository.schedule_repository import ScheduleRepository
@@ -16,6 +16,7 @@ from backend.Services.algorithm_client import (
     AlgorithmClient,
     get_default_algorithm_client,
 )
+from backend.Services.schedule_service import ScheduleService
 from backend.Services.session_service import SessionService
 
 
@@ -28,6 +29,7 @@ class EngineerService:
         task_repo: TaskRepository,
         session_service: SessionService,
         algo_client: AlgorithmClient | None = None,
+        schedule_service: ScheduleService | None = None,
     ):
         self.engineer_repo = engineer_repo
         self.schedule_repo = schedule_repo
@@ -35,6 +37,7 @@ class EngineerService:
         self.task_repo = task_repo
         self.session_service = session_service
         self.algo_client = algo_client or get_default_algorithm_client()
+        self.schedule_service = schedule_service
 
     def create_engineer(self, dispatcher_id: str, data: EngineerCreate) -> EngineerOut:
         eng_id = data.id or f"eng_{uuid.uuid4().hex[:6]}"
@@ -67,22 +70,23 @@ class EngineerService:
         eng = self.engineer_repo.get_by_id(dispatcher_id, engineer_id)
         if not eng:
             raise HTTPException(status_code=404, detail="Инженер не найден")
+        if self.schedule_repo.get_by_engineer(dispatcher_id, engineer_id):
+            raise HTTPException(status_code=409, detail="Нельзя удалить инженера с сохранёнными визитами")
         self.schedule_repo.delete_by_engineer(dispatcher_id, engineer_id)
         self.explanation_repo.delete_by_engineer(dispatcher_id, engineer_id)
         self.engineer_repo.delete(dispatcher_id, engineer_id)
         return {"status": "ok", "deleted_id": engineer_id}
 
-    def toggle_status(self, dispatcher_id: str, engineer_id: str) -> StateResponse:
+    async def toggle_status(self, dispatcher_id: str, engineer_id: str) -> StateResponse:
         eng = self.engineer_repo.get_by_id(dispatcher_id, engineer_id)
         if not eng:
             raise HTTPException(status_code=404, detail="Инженер не найден")
 
-        # Engineer offline is irreversible
-        self.engineer_repo.set_status(dispatcher_id, engineer_id, "unavailable")
-        self.schedule_repo.delete_by_engineer(dispatcher_id, engineer_id)
-        self.explanation_repo.delete_by_engineer(dispatcher_id, engineer_id)
-
-        return self.session_service.build_state_response(dispatcher_id)
+        if self.schedule_service is None:
+            raise RuntimeError("ScheduleService is required to take an engineer off-line safely")
+        return await self.schedule_service.replan(
+            dispatcher_id, [ChangeEventIn(event_type="ENGINEER_UNAVAILABLE", engineer_id=engineer_id)]
+        )
 
     async def get_explanation(self, dispatcher_id: str, engineer_id: str) -> ExplanationOut:
         cache_key = f"eng_exp_{engineer_id}"

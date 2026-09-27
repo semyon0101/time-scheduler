@@ -8,7 +8,7 @@ class SeedRequest(BaseModel):
 
 
 class ChangeEventIn(BaseModel):
-    event_type: str
+    event_type: str  # REGULAR_TASK accepts either task or task_id of an existing unassigned task
     timestamp: str | None = None
     task: TaskCreate | None = None
     task_id: str | None = None

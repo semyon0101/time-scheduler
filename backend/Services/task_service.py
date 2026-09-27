@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from backend.Entities.explanation import ExplanationCache
 from backend.Entities.task import Task
 from backend.Models.schedule import StateResponse
-from backend.Models.session import ExplanationOut
+from backend.Models.session import ChangeEventIn, ExplanationOut
 from backend.Models.task import TaskCreate, TaskOut
 from backend.Repository.engineer_repository import EngineerRepository
 from backend.Repository.explanation_repository import ExplanationRepository
@@ -15,6 +15,7 @@ from backend.Services.algorithm_client import (
     AlgorithmClient,
     get_default_algorithm_client,
 )
+from backend.Services.schedule_service import ScheduleService
 from backend.Services.session_service import SessionService
 
 
@@ -27,6 +28,7 @@ class TaskService:
         engineer_repo: EngineerRepository,
         session_service: SessionService,
         algo_client: AlgorithmClient | None = None,
+        schedule_service: ScheduleService | None = None,
     ):
         self.task_repo = task_repo
         self.schedule_repo = schedule_repo
@@ -34,6 +36,7 @@ class TaskService:
         self.engineer_repo = engineer_repo
         self.session_service = session_service
         self.algo_client = algo_client or get_default_algorithm_client()
+        self.schedule_service = schedule_service
 
     def create_task(self, dispatcher_id: str, data: TaskCreate) -> TaskOut:
         task_id = data.id or f"task_{uuid.uuid4().hex[:6]}"
@@ -73,18 +76,22 @@ class TaskService:
         t = self.task_repo.get_by_id(dispatcher_id, task_id)
         if not t:
             raise HTTPException(status_code=404, detail="Заявка не найдена")
+        if self.schedule_repo.get_by_task(dispatcher_id, task_id):
+            raise HTTPException(status_code=409, detail="Сначала отмените запланированную заявку")
         self.schedule_repo.delete_by_task(dispatcher_id, task_id)
         self.explanation_repo.delete_by_task(dispatcher_id, task_id)
         self.task_repo.delete(dispatcher_id, task_id)
         return {"status": "ok", "deleted_id": task_id}
 
-    def cancel_task(self, dispatcher_id: str, task_id: str) -> StateResponse:
+    async def cancel_task(self, dispatcher_id: str, task_id: str) -> StateResponse:
         t = self.task_repo.get_by_id(dispatcher_id, task_id)
         if not t:
             raise HTTPException(status_code=404, detail="Заявка не найдена")
-        self.task_repo.set_status(dispatcher_id, task_id, "cancelled")
-        self.schedule_repo.delete_by_task(dispatcher_id, task_id)
-        return self.session_service.build_state_response(dispatcher_id)
+        if self.schedule_service is None:
+            raise RuntimeError("ScheduleService is required to cancel a task safely")
+        return await self.schedule_service.replan(
+            dispatcher_id, [ChangeEventIn(event_type="CANCEL_TASK", task_id=task_id)]
+        )
 
     async def get_explanation(self, dispatcher_id: str, task_id: str) -> ExplanationOut:
         cached = self.explanation_repo.get_cache(dispatcher_id, task_id)

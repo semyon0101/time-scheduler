@@ -5,12 +5,16 @@ from backend.Services.routing.geo import calc_travel_min, haversine_km, minutes_
 
 
 def evaluate_route_feasibility(
-    engineer: EngineerModel, task_sequence: list[TaskModel]
+    engineer: EngineerModel,
+    task_sequence: list[TaskModel],
+    *,
+    fixed_starts: dict[str, int] | None = None,
+    start_time_min: int | None = None,
+    start_position: tuple[float, float] | None = None,
 ) -> tuple[bool, list[ScheduleStop], float, int, int]:
-    """Return feasibility and timings for the supplied order of visits."""
-    current_lat = engineer.start_lat
-    current_lon = engineer.start_lon
-    current_time_min = time_to_minutes(engineer.shift_start)
+    """Validate an ordered suffix, optionally continuing after committed stops."""
+    current_lat, current_lon = start_position or (engineer.start_lat, engineer.start_lon)
+    current_time_min = max(time_to_minutes(engineer.shift_start), start_time_min or 0)
     shift_end_min = time_to_minutes(engineer.shift_end)
 
     stops: list[ScheduleStop] = []
@@ -28,6 +32,10 @@ def evaluate_route_feasibility(
         travel_min = calc_travel_min(dist_km, engineer.transport_type)
         earliest_arrival = current_time_min + travel_min
         service_start = max(earliest_arrival, time_to_minutes(task.window_start))
+        if fixed_starts and task.id in fixed_starts:
+            if service_start > fixed_starts[task.id]:
+                return False, [], 0.0, 0, 0
+            service_start = fixed_starts[task.id]
         service_end = service_start + task.duration_min
 
         if service_end > time_to_minutes(task.window_end) or service_end > shift_end_min:

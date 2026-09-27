@@ -2,6 +2,8 @@ import os
 import subprocess
 import sys
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -198,8 +200,8 @@ def main():
         task_exp_data = r_task_exp.json()
         print(f"   [OK] /tasks/{task_id}/explanation took {t_duration:.2f}s: {task_exp_data['explanation'][:160]}...")
 
-        # Step 3.9: Engineer Goes Off-Line (Irreversible & Tasks Unassigned)
-        print("\n3.9 Testing Engineer Goes Off-Line (Irreversible & Task Unassignment)...")
+        # Step 3.9: The engineer finishes started work; only future work may move.
+        print("\n3.9 Testing engineer off-line with committed work preserved...")
         active_eng_id = active_route["engineer_id"]
         assigned_stops = [s["task_id"] for s in active_route["stops"]]
         assert len(assigned_stops) > 0
@@ -212,24 +214,25 @@ def main():
         offline_eng = next(e for e in offline_data["engineers"] if e["id"] == active_eng_id)
         assert offline_eng["status"] == "unavailable"
 
-        # Check all their previous tasks are now unassigned
+        # No previously assigned work is lost; future visits may move to another engineer.
         unassigned_ids = {u["task_id"] for u in offline_data["unassigned_tasks"]}
+        reassigned_ids = {s["task_id"] for route in offline_data["schedule"] for s in route["stops"]}
+        now = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%H:%M")
+        offline_route = next(route for route in offline_data["schedule"] if route["engineer_id"] == active_eng_id)
+        assert all(stop["start_time"] <= now for stop in offline_route["stops"])
         for stop_tid in assigned_stops:
-            assert stop_tid in unassigned_ids, f"Task {stop_tid} was not moved to unassigned!"
+            assert stop_tid in unassigned_ids | reassigned_ids, f"Task {stop_tid} disappeared!"
 
-        # Check metrics updated
-        assert offline_data["metrics"]["unassigned_count"] >= len(assigned_stops)
-        print(
-            f"   [OK] Engineer {active_eng_id} successfully went off-line: {len(assigned_stops)} tasks moved to unassigned, status is 'unavailable'!"
-        )
+        assert offline_data["metrics"]["unassigned_count"] == len(offline_data["unassigned_tasks"])
+        print(f"   [OK] Engineer {active_eng_id} went off-line; started work retained, future tasks accounted for!")
 
-        # Check explanation for now-unassigned task
-        orphan_task_id = assigned_stops[0]
-        r_orphan_exp = client.get(f"/tasks/{orphan_task_id}/explanation")
-        assert r_orphan_exp.status_code == 200
-        orphan_exp = r_orphan_exp.json()["explanation"]
-        assert "не назначена" in orphan_exp or "нераспределенной" in orphan_exp
-        print(f"   [OK] /tasks/{orphan_task_id}/explanation properly explains unassigned status!")
+        orphan_task_id = next((tid for tid in assigned_stops if tid in unassigned_ids), None)
+        if orphan_task_id:
+            r_orphan_exp = client.get(f"/tasks/{orphan_task_id}/explanation")
+            assert r_orphan_exp.status_code == 200
+            orphan_exp = r_orphan_exp.json()["explanation"]
+            assert "не назначена" in orphan_exp or "нераспределенной" in orphan_exp
+            print(f"   [OK] /tasks/{orphan_task_id}/explanation properly explains unassigned status!")
 
         print("\n=======================================================")
         print(" 🎉 ALL COMPREHENSIVE TESTS COMPLETED WITH 100% SUCCESS!")
