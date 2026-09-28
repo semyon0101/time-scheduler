@@ -39,6 +39,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     'Работы на подключение и дозаказы'
   ]);
 
+  const invalidTaskWindow = Boolean(taskWindowStart && taskWindowEnd && taskWindowStart >= taskWindowEnd);
+
   const allSkills = [
     'Локальные работы',
     'Работы на подключение и дозаказы',
@@ -57,6 +59,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
 
   const handleTaskSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!taskWindowStart || !taskWindowEnd || invalidTaskWindow) return;
     onSubmitTask({
       address: taskAddress,
       district: taskDistrict,
@@ -150,6 +153,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                   required
                   value={taskWindowStart}
                   onChange={(e) => setTaskWindowStart(e.target.value)}
+                  aria-invalid={invalidTaskWindow}
+                  aria-describedby={invalidTaskWindow ? 'task-window-error' : undefined}
                   className="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-beeline-yellow"
                 />
               </div>
@@ -162,12 +167,20 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 <input
                   type="time"
                   required
+                  min={taskWindowStart}
                   value={taskWindowEnd}
                   onChange={(e) => setTaskWindowEnd(e.target.value)}
+                  aria-invalid={invalidTaskWindow}
+                  aria-describedby={invalidTaskWindow ? 'task-window-error' : undefined}
                   className="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-beeline-yellow"
                 />
               </div>
             </div>
+            {invalidTaskWindow && (
+              <p id="task-window-error" role="alert" className="text-rose-400">
+                Окончание окна должно быть позже начала.
+              </p>
+            )}
 
             {/* Duration & Priority */}
             <div className="grid grid-cols-2 gap-2">
@@ -256,7 +269,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             <div className="pt-2">
               <button
                 type="submit"
-                className="w-full py-2.5 bg-beeline-yellow hover:bg-yellow-400 text-slate-950 font-bold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                disabled={invalidTaskWindow}
+                className="w-full py-2.5 bg-beeline-yellow hover:bg-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Plus className="w-4 h-4" />
                 <span>Создать заявку</span>

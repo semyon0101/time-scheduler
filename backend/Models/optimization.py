@@ -2,6 +2,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from backend.Models.task import TaskTimeWindow
+
 
 class EngineerModel(BaseModel):
     id: str
@@ -15,14 +17,12 @@ class EngineerModel(BaseModel):
     status: str = "active"
 
 
-class TaskModel(BaseModel):
+class TaskModel(TaskTimeWindow):
     id: str
     address: str
     district: str | None = ""
     lat: float
     lon: float
-    window_start: str = "09:00"
-    window_end: str = "22:00"
     duration_min: int = 45
     required_skill: str = "Локальные работы"
     required_transport: str | None = None

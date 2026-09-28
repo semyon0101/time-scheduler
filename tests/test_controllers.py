@@ -111,6 +111,33 @@ def test_task_endpoints(client: TestClient):
     assert r_del.json()["status"] == "ok"
 
 
+def test_invalid_task_window_is_rejected_for_creation_and_events(client: TestClient):
+    headers = {"X-Dispatcher-Id": "disp_invalid_window"}
+    before = len(client.get("/api/v1/session/init", headers=headers).json()["tasks"])
+    task = {
+        "id": "task_invalid_window",
+        "address": "Москва",
+        "lat": 55.75,
+        "lon": 37.61,
+        "window_start": "16:00",
+        "window_end": "12:00",
+    }
+
+    assert client.post("/api/v1/tasks", json=task, headers=headers).status_code == 422
+    assert (
+        client.post(
+            "/api/v1/schedule/replan",
+            json={"events": [{"event_type": "URGENT_TASK", "task": task}]},
+            headers=headers,
+        ).status_code
+        == 422
+    )
+    assert len(client.get("/api/v1/state", headers=headers).json()["tasks"]) == before
+
+    task["window_end"] = "18:00"
+    assert client.post("/api/v1/tasks", json=task, headers=headers).status_code == 200
+
+
 def test_schedule_endpoints(client: TestClient):
     headers = {"X-Dispatcher-Id": "disp_ctrl_sched"}
 

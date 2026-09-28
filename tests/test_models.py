@@ -1,5 +1,9 @@
+import pytest
+from pydantic import ValidationError
+
 from backend.config import sqlalchemy_url
 from backend.Models.engineer import EngineerCreate, EngineerOut
+from backend.Models.optimization import TaskModel
 from backend.Models.schedule import MetricsOut, StateResponse
 from backend.Models.session import ChangeEventIn, ReplanRequestIn
 from backend.Models.settings import Settings
@@ -14,7 +18,9 @@ def test_settings_defaults():
 
 
 def test_postgresql_driver_is_explicit():
-    assert sqlalchemy_url("postgresql://postgres:secret@localhost:5432/scheduler_db").drivername == "postgresql+psycopg2"
+    assert (
+        sqlalchemy_url("postgresql://postgres:secret@localhost:5432/scheduler_db").drivername == "postgresql+psycopg2"
+    )
     assert sqlalchemy_url("sqlite:///:memory:").drivername == "sqlite"
 
 
@@ -66,6 +72,13 @@ def test_task_models():
         status="new",
     )
     assert task_out.status == "new"
+
+
+@pytest.mark.parametrize("model", [TaskCreate, TaskModel])
+@pytest.mark.parametrize("start,end", [("16:00", "12:00"), ("16:00", "16:00"), ("25:00", "26:00")])
+def test_task_models_reject_invalid_windows(model, start, end):
+    with pytest.raises(ValidationError):
+        model(id="invalid", address="Москва", lat=55.75, lon=37.61, window_start=start, window_end=end)
 
 
 def test_state_response_structure():
