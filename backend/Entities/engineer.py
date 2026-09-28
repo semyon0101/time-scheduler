@@ -1,6 +1,6 @@
 import json
 
-from sqlalchemy import Column, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, Column, Float, ForeignKey, String, Text
 from sqlalchemy.orm import relationship
 
 from backend.Entities.database import Base
@@ -19,6 +19,8 @@ class Engineer(Base):
     skills_json = Column(Text, default="[]")
     transport_type = Column(String, default="Автомобиль")
     status = Column(String, default="active")  # "active" | "unavailable" | "new"
+    area_id = Column(String, nullable=False, default="default", server_default="default")
+    is_on_duty = Column(Boolean, nullable=False, default=True, server_default="true")
 
     dispatcher = relationship("Dispatcher", back_populates="engineers")
 

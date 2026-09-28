@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from backend.Entities.metrics import PlanMetricsRecord
 from backend.Entities.schedule import ScheduleRecord
 from backend.Entities.task import Task
-from backend.Models.optimization import PlanMetrics, UnassignedTask
+from backend.Models.optimization import QUALITY_METRIC_FIELDS, PlanMetrics, UnassignedTask
 from backend.Models.schedule import StateResponse
 from backend.Models.session import ChangeEventIn
 from backend.Repository.engineer_repository import EngineerRepository
@@ -54,6 +54,14 @@ def _current_event_timestamp() -> str:
     return datetime.now(ZoneInfo("Europe/Moscow")).isoformat(timespec="seconds")
 
 
+def _event_created_at(timestamp: str) -> datetime:
+    if len(timestamp) == 5 and timestamp[2] == ":":
+        hours, minutes = map(int, timestamp.split(":"))
+        return datetime.now(ZoneInfo("Europe/Moscow")).replace(hour=hours, minute=minutes, second=0, microsecond=0)
+    moment = datetime.fromisoformat(timestamp)
+    return moment if moment.tzinfo else moment.replace(tzinfo=ZoneInfo("Europe/Moscow"))
+
+
 class ScheduleService:
     def __init__(
         self,
@@ -89,6 +97,9 @@ class ScheduleService:
                 "shift_end": e.shift_end,
                 "skills": e.skills,
                 "transport_type": e.transport_type,
+                "status": e.status,
+                "area_id": e.area_id,
+                "is_on_duty": e.is_on_duty,
             }
             for e in engineers
         ]
@@ -106,6 +117,9 @@ class ScheduleService:
                 "required_skill": t.required_skill,
                 "required_transport": t.required_transport,
                 "priority": t.priority,
+                "category": t.category,
+                "area_id": t.area_id,
+                "created_at": t.created_at,
             }
             for t in tasks
         ]
@@ -136,6 +150,7 @@ class ScheduleService:
             unassigned_count=opt_m.get("unassigned_tasks_count", 0),
             mileage_reduction_pct=opt_m.get("mileage_reduction_pct"),
             engineers_reduction_pct=opt_m.get("engineers_reduction_pct"),
+            **{field: opt_m.get(field, 0) for field in QUALITY_METRIC_FIELDS},
             unassigned_json=json.dumps(unassigned, ensure_ascii=False),
         )
         self.metrics_repo.upsert(metrics_rec)
@@ -157,8 +172,11 @@ class ScheduleService:
             payload["timestamp"] = payload["timestamp"] or batch_time
             if event.event_type in {"URGENT_TASK", "REGULAR_TASK"} and payload["task"]:
                 payload["task"]["id"] = payload["task"]["id"] or f"task_{uuid.uuid4().hex[:8]}"
+                payload["task"]["area_id"] = payload["task"]["area_id"] or state.active_preset
+                payload["task"]["created_at"] = payload["task"]["created_at"] or _event_created_at(payload["timestamp"])
                 if event.event_type == "URGENT_TASK":
                     payload["task"]["priority"] = "Срочная"
+                    payload["task"]["category"] = "emergency"
             events_payload.append(payload)
 
         try:
@@ -192,6 +210,9 @@ class ScheduleService:
                         required_skill=data["required_skill"],
                         required_transport=data.get("required_transport"),
                         priority=data["priority"],
+                        category=data["category"],
+                        area_id=data.get("area_id") or state.active_preset,
+                        created_at=data.get("created_at") or _event_created_at(event["timestamp"]),
                         status="active" if data["id"] in assigned_ids else "new",
                     )
                 )

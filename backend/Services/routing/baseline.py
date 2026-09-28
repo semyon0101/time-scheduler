@@ -1,3 +1,5 @@
+from datetime import date, datetime
+
 from backend.Models.optimization import (
     EngineerModel,
     EngineerRoute,
@@ -8,14 +10,15 @@ from backend.Models.optimization import (
 )
 from backend.Services.routing.geo import (
     calc_travel_min,
-    haversine_km,
     minutes_to_time,
+    road_distance_km,
     time_to_minutes,
 )
+from backend.Services.routing.policy import MOSCOW, assess_plan, available_minute, eligible_for, received_datetime
 
 
 def solve_baseline(
-    engineers: list[EngineerModel], tasks: list[TaskModel]
+    engineers: list[EngineerModel], tasks: list[TaskModel], *, planning_date: date | None = None
 ) -> tuple[list[EngineerRoute], PlanMetrics, list[UnassignedTask]]:
     """
     Implements the baseline FIFO allocator according to Section 2.3 of Beeline specification:
@@ -55,7 +58,14 @@ def solve_baseline(
 
     unassigned: list[UnassignedTask] = []
 
-    for task in tasks:
+    planning_date = planning_date or datetime.now(MOSCOW).date()
+    # Preserve legacy input order when receipt times are absent.
+    arrival_order = (
+        sorted(tasks, key=lambda task: received_datetime(task.created_at))
+        if all(t.created_at for t in tasks)
+        else tasks
+    )
+    for task in arrival_order:
         assigned = False
         task_w_start = time_to_minutes(task.window_start)
         task_w_end = time_to_minutes(task.window_end)
@@ -64,20 +74,16 @@ def solve_baseline(
         # Check engineers sequentially in given list order
         for eng in engineers:
             # 1. Qualification constraint
-            if task.required_skill not in eng.skills:
-                continue
-
-            # 2. Transport constraint
-            if task.required_transport and eng.transport_type != task.required_transport:
+            if not eligible_for(eng, task):
                 continue
 
             state = eng_state[eng.id]
-            dist_km = haversine_km(state["lat"], state["lon"], task.lat, task.lon)
+            dist_km = road_distance_km(state["lat"], state["lon"], task.lat, task.lon)
             travel_min = calc_travel_min(dist_km, eng.transport_type)
 
             earliest_arrival = state["time_min"] + travel_min
             # Can service start within client time window?
-            actual_start = max(earliest_arrival, task_w_start)
+            actual_start = max(earliest_arrival, task_w_start, available_minute(task, planning_date))
 
             # 3. Time window & Shift constraints
             if (actual_start + task_dur) <= task_w_end and (actual_start + task_dur) <= state["shift_end_min"]:
@@ -126,15 +132,6 @@ def solve_baseline(
 
     # Calculate summary metrics
     all_routes = list(routes.values())
-    active_engineers = sum(1 for r in all_routes if len(r.stops) > 0)
-    total_km = round(sum(r.total_distance_km for r in all_routes), 2)
-    assigned_count = len(tasks) - len(unassigned)
-
-    metrics = PlanMetrics(
-        total_engineers_used=active_engineers,
-        total_mileage_km=total_km,
-        assigned_tasks_count=assigned_count,
-        unassigned_tasks_count=len(unassigned),
-    )
+    metrics, _ = assess_plan(all_routes, tasks, planning_date=planning_date)
 
     return all_routes, metrics, unassigned

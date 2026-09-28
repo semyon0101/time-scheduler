@@ -152,7 +152,7 @@ def test_offline_engineer_keeps_started_work_and_releases_only_future():
     future = _task("future", "12:00", "12:40", 40)
     published = _route(one, [_stop(started, "09:30", "10:20", 1), _stop(future, "12:00", "12:40", 2)])
 
-    routes, _, unassigned, _ = apply_batch_replanning(
+    routes, metrics, unassigned, _ = apply_batch_replanning(
         [published],
         [one, two],
         [ChangeEvent(event_type="ENGINEER_UNAVAILABLE", timestamp="09:40", engineer_id="one")],
@@ -162,6 +162,8 @@ def test_offline_engineer_keeps_started_work_and_releases_only_future():
     assert routes[0].stops == [published.stops[0]]
     assert [s.task_id for s in routes[1].stops] == ["future"]
     assert unassigned == []
+    assert metrics.reassigned_tasks == 1
+    assert metrics.shifted_start_min == 0
 
 
 def test_reassignment_respects_original_transport_requirement():
@@ -209,6 +211,7 @@ async def test_schedule_service_uses_original_tasks_and_rejects_started_cancella
             start_lat=eng.start_lat,
             start_lon=eng.start_lon,
             skills_json='["Локальные работы"]',
+            area_id="vostok",
             status="active",
         )
     )
@@ -224,6 +227,7 @@ async def test_schedule_service_uses_original_tasks_and_rejects_started_cancella
             window_end=original.window_end,
             duration_min=original.duration_min,
             required_skill=original.required_skill,
+            area_id="vostok",
             status="active",
         )
     )

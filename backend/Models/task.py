@@ -1,6 +1,9 @@
-from typing import Self
+from datetime import datetime
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+TaskCategory = Literal["emergency", "connection", "repair", "add_on", "other"]
 
 
 class TaskTimeWindow(BaseModel):
@@ -24,6 +27,9 @@ class TaskCreate(TaskTimeWindow):
     required_skill: str = "Локальные работы"
     required_transport: str | None = None
     priority: str = "Обычная"
+    category: TaskCategory = "other"
+    area_id: str | None = None
+    created_at: datetime | None = None
 
 
 class TaskOut(BaseModel):
@@ -38,6 +44,9 @@ class TaskOut(BaseModel):
     required_skill: str
     required_transport: str | None = None
     priority: str
+    category: TaskCategory = "other"
+    area_id: str = "default"
+    created_at: datetime | None = None
     status: str = "active"
     control_assigned_engineer: str | None = None
 

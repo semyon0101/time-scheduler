@@ -26,10 +26,12 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [taskSkill, setTaskSkill] = useState('Локальные работы');
   const [taskTransport, setTaskTransport] = useState('Любой');
   const [taskPriority, setTaskPriority] = useState('Обычная');
+  const [taskCategory, setTaskCategory] = useState<Task['category']>('repair');
 
   // Preselected smart defaults for Engineer
   const [engName, setEngName] = useState('Инженер Новиков Алексей');
   const [engTransport, setEngTransport] = useState('Автомобиль');
+  const [engIsOnDuty, setEngIsOnDuty] = useState(true);
   const [engShiftStart, setEngShiftStart] = useState('09:00');
   const [engShiftEnd, setEngShiftEnd] = useState('22:00');
   const [engLat, setEngLat] = useState('55.7512');
@@ -70,7 +72,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       duration_min: parseInt(taskDuration, 10) || 45,
       required_skill: taskSkill,
       required_transport: taskTransport === 'Любой' ? null : taskTransport,
-      priority: taskPriority
+      priority: taskPriority,
+      category: taskCategory
     });
     onClose();
   };
@@ -80,6 +83,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     onSubmitEngineer({
       name: engName,
       transport_type: engTransport,
+      is_on_duty: engIsOnDuty,
       shift_start: engShiftStart,
       shift_end: engShiftEnd,
       start_lat: parseFloat(engLat) || 55.75,
@@ -212,6 +216,21 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
 
             {/* Skill */}
             <div className="space-y-1">
+              <label className="text-slate-300 font-semibold">Категория заявки</label>
+              <select
+                value={taskCategory}
+                onChange={(e) => setTaskCategory(e.target.value as Task['category'])}
+                className="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-beeline-yellow"
+              >
+                <option value="emergency">Авария</option>
+                <option value="connection">Подключение</option>
+                <option value="repair">Ремонт</option>
+                <option value="add_on">Дозаказ</option>
+              </select>
+            </div>
+
+            {/* Skill */}
+            <div className="space-y-1">
               <label className="text-slate-300 font-semibold flex items-center gap-1">
                 <Wrench className="w-3 h-3 text-purple-400" />
                 <span>Требуемый навык</span>
@@ -312,6 +331,12 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 <option value="Пешеход">Пешеход (5 км/ч)</option>
               </select>
             </div>
+
+            {/* Shift */}
+            <label className="flex items-center gap-2 text-slate-300 font-semibold">
+              <input type="checkbox" checked={engIsOnDuty} onChange={(e) => setEngIsOnDuty(e.target.checked)} />
+              Дежурит сегодня по графику
+            </label>
 
             {/* Shift */}
             <div className="grid grid-cols-2 gap-2">

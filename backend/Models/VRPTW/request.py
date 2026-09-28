@@ -1,4 +1,8 @@
+from datetime import date, datetime
+
 from pydantic import BaseModel
+
+from backend.Models.task import TaskCategory
 
 from .request_types import (
     EngineerStatus,
@@ -18,6 +22,8 @@ class EngineerRequest(BaseModel):
     skills: list[Skill]
     transport_type: TransportType
     status: EngineerStatus
+    area_id: str = "default"
+    is_on_duty: bool = True
 
 
 class TaskRequest(BaseModel):
@@ -29,8 +35,12 @@ class TaskRequest(BaseModel):
     required_skill: Skill
     required_transport: TransportType | None = None
     priority: Priority
+    category: TaskCategory = "other"
+    area_id: str = "default"
+    created_at: datetime | None = None
 
 
 class Request(BaseModel):
     engineers: EngineerRequest  # один инженер на день
     tasks: list[TaskRequest]
+    planning_date: date | None = None

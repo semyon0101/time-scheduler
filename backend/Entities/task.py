@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Float, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from backend.Entities.database import Base
@@ -19,6 +19,9 @@ class Task(Base):
     required_skill = Column(String, default="Локальные работы")
     required_transport = Column(String, nullable=True)
     priority = Column(String, default="Обычная")
+    category = Column(String, nullable=False, default="other", server_default="other")
+    area_id = Column(String, nullable=False, default="default", server_default="default")
+    created_at = Column(DateTime(timezone=True), nullable=True)
     status = Column(String, default="active")  # "active" | "cancelled" | "new"
     control_assigned_engineer = Column(String, nullable=True)
 

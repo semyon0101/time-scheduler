@@ -1,9 +1,8 @@
 """Replan published routes while preserving work already started."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from backend.Models.optimization import (
     ChangeEvent,
@@ -16,8 +15,7 @@ from backend.Models.optimization import (
 )
 from backend.Services.routing.feasibility import evaluate_route_feasibility
 from backend.Services.routing.geo import time_to_minutes
-
-MOSCOW = ZoneInfo("Europe/Moscow")
+from backend.Services.routing.policy import MOSCOW, assess_plan, received_datetime
 
 
 def _event_minutes(timestamp: str | None) -> int:
@@ -50,6 +48,7 @@ class _Route:
     published_starts: dict[str, int] = field(default_factory=dict)
     published: EngineerRoute | None = None
     original_future_ids: list[str] = field(default_factory=list)
+    planning_date: date | None = None
 
     def evaluate(self, sequence: list[TaskModel], now: int, *, keep_starts: bool) -> tuple[bool, list[ScheduleStop]]:
         last = self.committed[-1] if self.committed else None
@@ -59,6 +58,7 @@ class _Route:
             fixed_starts=self.published_starts if keep_starts else None,
             start_time_min=max(now, time_to_minutes(last.end_time)) if last else now,
             start_position=(last.lat, last.lon) if last else None,
+            planning_date=self.planning_date,
         )
         return feasible, stops
 
@@ -89,42 +89,74 @@ class _Route:
         )
 
 
-def _insert(task: TaskModel, routes: dict[str, _Route], now: int, *, keep_starts: bool) -> str | None:
-    best: tuple[float, str, int] | None = None
+def _insert(
+    task: TaskModel,
+    routes: dict[str, _Route],
+    now: int,
+    *,
+    keep_starts: bool,
+    tasks: list[TaskModel],
+    published: list[EngineerRoute],
+    planning_date: date,
+) -> str | None:
+    best: tuple | None = None
+    best_place: tuple[str, int] | None = None
     for engineer_id, route in routes.items():
         if route.engineer.status == "unavailable":
             continue
-        feasible, old_stops = route.evaluate(route.future, now, keep_starts=keep_starts)
+        feasible, _ = route.evaluate(route.future, now, keep_starts=keep_starts)
         if not feasible:
             raise ValueError(f"Не удалось сохранить расписание инженера {engineer_id}")
-        old_km = sum(stop.travel_km for stop in old_stops)
         for pos in range(len(route.future) + 1):
             sequence = route.future[:pos] + [task] + route.future[pos:]
-            feasible, stops = route.evaluate(sequence, now, keep_starts=keep_starts)
+            feasible, _ = route.evaluate(sequence, now, keep_starts=keep_starts)
             if feasible:
-                score = (round(sum(stop.travel_km for stop in stops) - old_km, 5), engineer_id, pos)
+                candidate = dict(routes)
+                candidate[engineer_id] = _Route(
+                    route.engineer,
+                    route.committed,
+                    sequence,
+                    route.published_starts if keep_starts else {},
+                    planning_date=planning_date,
+                )
+                candidate_routes = [part.result(now) for part in candidate.values()]
+                _, score = assess_plan(candidate_routes, tasks, planning_date=planning_date, published=published)
                 if best is None or score < best:
-                    best = score
-    if best is None:
+                    best, best_place = score, (engineer_id, pos)
+    if best_place is None:
         return None
-    _, engineer_id, pos = best
+    engineer_id, pos = best_place
     routes[engineer_id].future.insert(pos, task)
     return engineer_id
 
 
-def insert_regular_task(task: TaskModel, routes: dict[str, _Route], now: int) -> str | None:
+def insert_regular_task(
+    task: TaskModel,
+    routes: dict[str, _Route],
+    now: int,
+    tasks: list[TaskModel],
+    published: list[EngineerRoute],
+    planning_date: date,
+) -> str | None:
     """Try an insertion without changing existing assignees, visit order or start times."""
-    return _insert(task, routes, now, keep_starts=True)
+    return _insert(task, routes, now, keep_starts=True, tasks=tasks, published=published, planning_date=planning_date)
 
 
-def replan_emergency(tasks: list[TaskModel], routes: dict[str, _Route], now: int) -> None:
+def replan_emergency(
+    pending: list[TaskModel],
+    routes: dict[str, _Route],
+    now: int,
+    tasks: list[TaskModel],
+    published: list[EngineerRoute],
+    planning_date: date,
+) -> None:
     """Reassign all non-committed visits; completed and ongoing stops stay intact."""
     for route in routes.values():
         route.future = []
         route.published_starts.clear()
         route.published = None
-    for task in tasks:
-        _insert(task, routes, now, keep_starts=False)
+    for task in pending:
+        _insert(task, routes, now, keep_starts=False, tasks=tasks, published=published, planning_date=planning_date)
 
 
 def apply_batch_replanning(
@@ -136,7 +168,13 @@ def apply_batch_replanning(
     """Calculate a new plan without mutating either the inputs or persistence."""
     now = max((_event_minutes(event.timestamp) for event in events), default=_event_minutes(None))
     task_by_id = {task.id: task for task in tasks}
-    routes = {engineer.id: _Route(engineer) for engineer in engineers}
+    dated = [
+        received_datetime(datetime.fromisoformat(event.timestamp))
+        for event in events
+        if event.timestamp and len(event.timestamp) > 5
+    ]
+    planning_date = max(dated).date() if dated else datetime.now(MOSCOW).date()
+    routes = {engineer.id: _Route(engineer, planning_date=planning_date) for engineer in engineers}
     original_assignees: dict[str, str] = {}
     for published in current_schedule:
         if published.engineer_id not in routes:
@@ -183,7 +221,11 @@ def apply_batch_replanning(
             unavailable.add(event.engineer_id)
             diff["unavailable_engineers"].append(event.engineer_id)
         elif event.event_type in {"REGULAR_TASK", "URGENT_TASK"} and event.task:
-            task = event.task
+            task = (
+                event.task.model_copy(update={"category": "emergency", "priority": "Срочная"})
+                if event.event_type == "URGENT_TASK"
+                else event.task
+            )
             if task.id in task_by_id or task.id in new_ids:
                 raise ValueError(f"Заявка {task.id} уже существует")
             new_ids.add(task.id)
@@ -217,10 +259,21 @@ def apply_batch_replanning(
 
     if urgent:
         pending.extend(task for route in routes.values() for task in route.future)
-        replan_emergency(urgent + pending, routes, now)
+        pending.sort(
+            key=lambda task: ({"emergency": 0, "connection": 1}.get(task.category, 2), task.window_end, task.id)
+        )
+        replan_emergency(urgent + pending, routes, now, list(task_by_id.values()), current_schedule, planning_date)
     else:
         for task in pending:
-            _insert(task, routes, now, keep_starts=True)
+            _insert(
+                task,
+                routes,
+                now,
+                keep_starts=True,
+                tasks=list(task_by_id.values()),
+                published=current_schedule,
+                planning_date=planning_date,
+            )
 
     # After an emergency, the newly published future is the fixed reference for ordinary insertions.
     if regular and urgent:
@@ -231,7 +284,7 @@ def apply_batch_replanning(
     for task in regular:
         if task.id in cancelled:
             raise ValueError(f"Заявка {task.id} уже отменена")
-        if insert_regular_task(task, routes, now) is None:
+        if insert_regular_task(task, routes, now, list(task_by_id.values()), current_schedule, planning_date) is None:
             diff["notes"].append(f"Нет свободного интервала для заявки {task.id} без изменения расписания")
 
     result_routes = [route.result(now) for route in routes.values()]
@@ -256,10 +309,10 @@ def apply_batch_replanning(
         for task in task_by_id.values()
         if task.id not in assignees and task.id not in cancelled
     ]
-    metrics = PlanMetrics(
-        total_engineers_used=sum(bool(route.stops) for route in result_routes),
-        total_mileage_km=round(sum(route.total_distance_km for route in result_routes), 2),
-        assigned_tasks_count=len(assignees),
-        unassigned_tasks_count=len(unassigned),
+    metrics, _ = assess_plan(
+        result_routes,
+        [task for task in task_by_id.values() if task.id not in cancelled],
+        planning_date=planning_date,
+        published=current_schedule,
     )
     return result_routes, metrics, unassigned, diff

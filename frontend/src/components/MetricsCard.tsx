@@ -29,17 +29,11 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({ metrics, totalTasks, i
     );
   }
 
-  const engReduction = metrics.engineers_reduction_pct || 
-    (metrics.baseline_engineers > 0 
-      ? Math.round(((metrics.baseline_engineers - metrics.optimized_engineers) / metrics.baseline_engineers) * 100) 
-      : 0);
-
-  const mileageReduction = metrics.mileage_reduction_pct || 
-    (metrics.baseline_mileage > 0 
-      ? Math.round(((metrics.baseline_mileage - metrics.optimized_mileage) / metrics.baseline_mileage) * 100) 
-      : 0);
+  const engReduction = metrics.engineers_reduction_pct;
+  const mileageReduction = metrics.mileage_reduction_pct;
 
   return (
+    <>
     <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
       {/* Metric 1: Engineers Count */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 relative overflow-hidden">
@@ -48,7 +42,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({ metrics, totalTasks, i
             <Users className="w-3.5 h-3.5 text-blue-400" />
             Задействовано инженеров
           </span>
-          {engReduction > 0 && (
+          {engReduction != null && engReduction > 0 && (
             <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
               <TrendingDown className="w-3 h-3" />
               -{engReduction}%
@@ -58,7 +52,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({ metrics, totalTasks, i
         <div className="flex items-baseline gap-2">
           <span className="text-xl font-black text-white">{metrics.optimized_engineers}</span>
           <span className="text-xs text-slate-400">
-            чел <span className="line-through text-slate-400 ml-1">база: {metrics.baseline_engineers}</span>
+            чел {engReduction != null && <span className="line-through text-slate-400 ml-1">база: {metrics.baseline_engineers}</span>}
           </span>
         </div>
       </div>
@@ -70,7 +64,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({ metrics, totalTasks, i
             <Navigation className="w-3.5 h-3.5 text-amber-400" />
             Суммарный пробег
           </span>
-          {mileageReduction > 0 && (
+          {mileageReduction != null && mileageReduction > 0 && (
             <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
               <TrendingDown className="w-3 h-3" />
               -{mileageReduction}%
@@ -80,7 +74,7 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({ metrics, totalTasks, i
         <div className="flex items-baseline gap-2">
           <span className="text-xl font-black text-white">{metrics.optimized_mileage}</span>
           <span className="text-xs text-slate-400">
-            км <span className="line-through text-slate-400 ml-1">база: {metrics.baseline_mileage}</span>
+            км {mileageReduction != null && <span className="line-through text-slate-400 ml-1">база: {metrics.baseline_mileage}</span>}
           </span>
         </div>
       </div>
@@ -132,5 +126,14 @@ export const MetricsCard: React.FC<MetricsCardProps> = ({ metrics, totalTasks, i
         </div>
       </div>
     </div>
+    <div className="text-xs text-slate-300 flex flex-wrap gap-x-5 gap-y-1 px-1" role="status">
+      <span>Аварии без назначения: <strong>{metrics.unassigned_emergencies ?? 0}</strong></span>
+      <span>Подключения без назначения: <strong>{metrics.unassigned_connections ?? 0}</strong></span>
+      <span>Реакция на аварию: {metrics.measured_emergencies
+        ? <><strong>{metrics.late_emergencies ?? 0}</strong> позже 120 мин; в пределах 60 мин — <strong>{metrics.target_met_emergencies ?? 0}</strong> из {metrics.measured_emergencies}</>
+        : 'нет данных о времени поступления'}</span>
+      {(metrics.reassigned_tasks ?? 0) > 0 && <span>Смена исполнителя: {metrics.reassigned_tasks}</span>}
+    </div>
+    </>
   );
 };

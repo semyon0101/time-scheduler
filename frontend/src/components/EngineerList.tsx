@@ -29,7 +29,7 @@ export const EngineerList: React.FC<EngineerListProps> = ({
   onSelectEngineer
 }) => {
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<'all' | 'active' | 'idle' | 'unavailable' | 'new' | 'task_assigned'>('all');
+  const [filter, setFilter] = useState<'all' | 'active' | 'idle' | 'off_duty' | 'unavailable' | 'new' | 'task_assigned'>('all');
   const [skillFilter, setSkillFilter] = useState<string | null>(null);
 
   const routeByEngId = new Map(routes.map(r => [r.engineer_id, r]));
@@ -50,7 +50,7 @@ export const EngineerList: React.FC<EngineerListProps> = ({
     const stopsCount = route?.stops.length || 0;
     const isUnavailable = eng.status === 'unavailable';
     const isNew = eng.status === 'new';
-    const isIdle = stopsCount === 0 && !isUnavailable;
+    const isIdle = stopsCount === 0 && !isUnavailable && eng.is_on_duty !== false;
 
     // Search filter
     const searchLower = search.toLowerCase().trim();
@@ -67,6 +67,7 @@ export const EngineerList: React.FC<EngineerListProps> = ({
     // Tag filter
     if (filter === 'task_assigned') return assignedRoute ? eng.id === assignedRoute.engineer_id : false;
     if (filter === 'unavailable') return isUnavailable;
+    if (filter === 'off_duty') return eng.is_on_duty === false;
     if (filter === 'new') return isNew;
     if (filter === 'idle') return isIdle;
     if (filter === 'active') return stopsCount > 0 && !isUnavailable;
@@ -132,7 +133,15 @@ export const EngineerList: React.FC<EngineerListProps> = ({
               : 'bg-slate-800 text-slate-400 hover:text-slate-200'
           }`}
         >
-          Резерв ({allEngineers.filter(e => (routeByEngId.get(e.id)?.stops.length || 0) === 0 && e.status !== 'unavailable').length})
+          Резерв ({allEngineers.filter(e => (routeByEngId.get(e.id)?.stops.length || 0) === 0 && e.status !== 'unavailable' && e.is_on_duty !== false).length})
+        </button>
+        <button
+          onClick={() => setFilter('off_duty')}
+          className={`px-2 py-0.5 rounded font-medium cursor-pointer transition-colors ${
+            filter === 'off_duty' ? 'bg-slate-600 text-white font-bold' : 'bg-slate-800 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Выходной ({allEngineers.filter(e => e.is_on_duty === false).length})
         </button>
         <button
           onClick={() => setFilter('unavailable')}
@@ -217,6 +226,8 @@ export const EngineerList: React.FC<EngineerListProps> = ({
                         <UserX className="w-2.5 h-2.5 text-rose-400" />
                         Сход с линии
                       </span>
+                    ) : eng.is_on_duty === false ? (
+                      <span className="bg-slate-800 text-slate-300 border border-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded">Выходной</span>
                     ) : isNew ? (
                       <span className="bg-sky-950 text-sky-300 border border-sky-800 text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
                         <Sparkles className="w-2.5 h-2.5 text-sky-400" />

@@ -1,4 +1,6 @@
 import uuid
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 
@@ -40,6 +42,7 @@ class TaskService:
 
     def create_task(self, dispatcher_id: str, data: TaskCreate) -> TaskOut:
         task_id = data.id or f"task_{uuid.uuid4().hex[:6]}"
+        dispatcher = self.session_service.dispatcher_repo.get_by_id(dispatcher_id)
         new_task = Task(
             id=task_id,
             dispatcher_id=dispatcher_id,
@@ -53,6 +56,9 @@ class TaskService:
             required_skill=data.required_skill,
             required_transport=data.required_transport,
             priority=data.priority,
+            category=data.category,
+            area_id=data.area_id or dispatcher.active_preset,
+            created_at=data.created_at or datetime.now(ZoneInfo("Europe/Moscow")),
             status="new",
         )
         created = self.task_repo.create(new_task)
@@ -68,6 +74,9 @@ class TaskService:
             required_skill=created.required_skill,
             required_transport=created.required_transport,
             priority=created.priority,
+            category=created.category,
+            area_id=created.area_id,
+            created_at=created.created_at,
             status=created.status,
             control_assigned_engineer=created.control_assigned_engineer,
         )
@@ -133,6 +142,7 @@ class TaskService:
             "required_skill": sr.required_skill if sr else (task.required_skill if task else "Локальные работы"),
             "transport_type": sr.transport_type if sr else "Автомобиль",
             "arrival_time": sr.arrival_time if sr else "18:00",
+            "start_time": sr.start_time if sr else None,
             "window": f"{task.window_start} - {task.window_end}" if task else "18:00 - 20:00",
             "travel_km": sr.travel_km if sr else 2.1,
             "travel_min": sr.travel_min if sr else 15,

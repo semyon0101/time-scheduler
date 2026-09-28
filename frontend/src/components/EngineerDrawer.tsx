@@ -112,6 +112,10 @@ export const EngineerDrawer: React.FC<EngineerDrawerProps> = ({
             <span className="text-[10px] bg-rose-950 text-rose-300 border border-rose-800 px-2 py-0.5 rounded font-bold">
               Сход с линии
             </span>
+          ) : engineer?.is_on_duty === false ? (
+            <span className="text-[10px] bg-slate-800 text-slate-300 border border-slate-600 px-2 py-0.5 rounded font-bold">
+              Выходной
+            </span>
           ) : isIdle ? (
             <span className="text-[10px] bg-slate-800 text-slate-400 border border-slate-700 px-2 py-0.5 rounded font-bold">
               В резерве

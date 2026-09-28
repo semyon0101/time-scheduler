@@ -12,6 +12,8 @@ from backend.Models.optimization import EngineerModel, TaskModel
 from backend.Services.algorithm_client import AlgorithmClient
 from backend.Services.routing import optimizer
 from backend.Services.routing.baseline import solve_baseline
+from backend.Services.routing.feasibility import evaluate_route_feasibility
+from backend.Services.routing.geo import MOSCOW_NETWORK_DETOUR_FACTOR, calc_travel_min, haversine_km
 from test_cli import find_preset_file
 
 
@@ -127,6 +129,31 @@ def test_task_rejected_by_first_engineer_is_available_to_next():
     assert routes[1].stops[0].task_id == task.id
     assert metrics.assigned_tasks_count == 1
     assert unassigned == []
+
+
+def test_moscow_detour_factor_is_shared_by_all_route_calculations():
+    engineer = EngineerModel(id="eng", name="eng", start_lat=55.75, start_lon=37.62, skills=["Локальные работы"])
+    task = TaskModel(
+        id="visit",
+        address="Москва",
+        lat=55.76,
+        lon=37.63,
+        window_start="09:00",
+        window_end="12:00",
+        duration_min=30,
+    )
+    direct_km = haversine_km(engineer.start_lat, engineer.start_lon, task.lat, task.lon)
+    expected_km = direct_km * MOSCOW_NETWORK_DETOUR_FACTOR
+    expected_minutes = calc_travel_min(expected_km, engineer.transport_type)
+
+    baseline, _, _ = solve_baseline([engineer], [task])
+    feasible, ordered_stops, _, _, _ = evaluate_route_feasibility(engineer, [task])
+    optimized, _, _ = optimizer.solve_vrptw([engineer], [task])
+
+    assert feasible
+    for stop in (baseline[0].stops[0], ordered_stops[0], optimized[0].stops[0]):
+        assert stop.travel_km == pytest.approx(expected_km, abs=0.001)
+        assert stop.travel_min == expected_minutes
 
 
 def test_fifo_respects_end_of_time_window():

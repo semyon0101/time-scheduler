@@ -8,6 +8,7 @@ from backend.Entities.dispatcher import Dispatcher
 from backend.Entities.engineer import Engineer
 from backend.Entities.task import Task
 from backend.Models.engineer import EngineerOut
+from backend.Models.optimization import QUALITY_METRIC_FIELDS
 from backend.Models.schedule import (
     EngineerRouteOut,
     MetricsOut,
@@ -22,6 +23,7 @@ from backend.Repository.explanation_repository import ExplanationRepository
 from backend.Repository.metrics_repository import MetricsRepository
 from backend.Repository.schedule_repository import ScheduleRepository
 from backend.Repository.task_repository import TaskRepository
+from backend.Services.routing.dataset import enrich_preset_data
 
 PRESET_ALIASES = {
     "yugcenter": "yugocentr",
@@ -104,7 +106,7 @@ class SessionService:
             )
 
         with open(seed_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            data = enrich_preset_data(json.load(f), normalized_preset)
 
         for e in data.get("engineers", []):
             eng = Engineer(
@@ -117,6 +119,8 @@ class SessionService:
                 shift_end=e.get("shift_end", "22:00"),
                 skills_json=json.dumps(e.get("skills", []), ensure_ascii=False),
                 transport_type=e.get("transport_type", "Автомобиль"),
+                area_id=e["area_id"],
+                is_on_duty=e["is_on_duty"],
                 status="active",
             )
             self.engineer_repo.create(eng)
@@ -135,6 +139,9 @@ class SessionService:
                 required_skill=t.get("required_skill", "Локальные работы"),
                 required_transport=t.get("required_transport"),
                 priority=t.get("priority", "Обычная"),
+                category=t["category"],
+                area_id=t["area_id"],
+                created_at=t.get("created_at"),
                 status="active",
                 control_assigned_engineer=t.get("control_assigned_engineer"),
             )
@@ -206,6 +213,7 @@ class SessionService:
                 unassigned_count=metrics_rec.unassigned_count,
                 mileage_reduction_pct=metrics_rec.mileage_reduction_pct,
                 engineers_reduction_pct=metrics_rec.engineers_reduction_pct,
+                **{field: getattr(metrics_rec, field) for field in QUALITY_METRIC_FIELDS},
             )
             try:
                 unassigned_data = json.loads(metrics_rec.unassigned_json)
@@ -248,6 +256,8 @@ class SessionService:
                     skills=e.skills,
                     transport_type=e.transport_type,
                     status=e.status or "active",
+                    area_id=e.area_id,
+                    is_on_duty=e.is_on_duty,
                 )
                 for e in engineers
             ],
@@ -265,6 +275,9 @@ class SessionService:
                     required_transport=t.required_transport,
                     priority=t.priority,
                     status=t.status or "active",
+                    category=t.category,
+                    area_id=t.area_id,
+                    created_at=t.created_at,
                     control_assigned_engineer=t.control_assigned_engineer,
                 )
                 for t in tasks

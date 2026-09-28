@@ -1,8 +1,21 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
 
-from backend.Models.task import TaskTimeWindow
+from backend.Models.task import TaskCategory, TaskTimeWindow
+
+QUALITY_METRIC_FIELDS = (
+    "unassigned_emergencies",
+    "unassigned_connections",
+    "late_emergencies",
+    "emergency_excess_min",
+    "emergency_response_min",
+    "measured_emergencies",
+    "reassigned_tasks",
+    "shifted_start_min",
+    "target_met_emergencies",
+)
 
 
 class EngineerModel(BaseModel):
@@ -15,6 +28,8 @@ class EngineerModel(BaseModel):
     skills: list[str] = Field(default_factory=list)
     transport_type: str = "Автомобиль"
     status: str = "active"
+    area_id: str = "default"
+    is_on_duty: bool = True
 
 
 class TaskModel(TaskTimeWindow):
@@ -27,6 +42,9 @@ class TaskModel(TaskTimeWindow):
     required_skill: str = "Локальные работы"
     required_transport: str | None = None
     priority: str = "Обычная"
+    category: TaskCategory = "other"
+    area_id: str = "default"
+    created_at: datetime | None = None
 
 
 class ScheduleStop(BaseModel):
@@ -74,6 +92,15 @@ class PlanMetrics(BaseModel):
     unassigned_tasks_count: int
     mileage_reduction_pct: float | None = None
     engineers_reduction_pct: float | None = None
+    unassigned_emergencies: int = 0
+    unassigned_connections: int = 0
+    late_emergencies: int = 0
+    emergency_excess_min: int = 0
+    emergency_response_min: int = 0
+    measured_emergencies: int = 0
+    target_met_emergencies: int = 0
+    reassigned_tasks: int = 0
+    shifted_start_min: int = 0
 
 
 class OptimizeRequest(BaseModel):

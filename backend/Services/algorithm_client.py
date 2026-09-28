@@ -5,10 +5,13 @@ from backend.Models.optimization import (
     EngineerModel,
     EngineerRoute,
     TaskModel,
+    UnassignedTask,
 )
 from backend.Services.explanation import generate_explanation
 from backend.Services.routing.baseline import solve_baseline
+from backend.Services.routing.feasibility import diagnose_unassigned_reason
 from backend.Services.routing.optimizer import solve_vrptw
+from backend.Services.routing.policy import assess_plan
 from backend.Services.routing.replanner import apply_batch_replanning
 
 
@@ -28,11 +31,32 @@ class AlgorithmClient:
         base_routes, base_metrics, _ = solve_baseline(eng_models, task_models)
         opt_routes, opt_metrics, opt_unassigned = solve_vrptw(eng_models, task_models)
 
-        if base_metrics.total_mileage_km > 0:
+        _, base_key = assess_plan(base_routes, task_models)
+        _, opt_key = assess_plan(opt_routes, task_models)
+        if base_key < opt_key:
+            opt_routes, opt_metrics = base_routes, base_metrics.model_copy(deep=True)
+            assigned_by_baseline = {stop.task_id for route in base_routes for stop in route.stops}
+            opt_unassigned = [
+                UnassignedTask(
+                    task_id=task.id,
+                    address=task.address,
+                    reason=diagnose_unassigned_reason(task, eng_models),
+                    priority=task.priority,
+                )
+                for task in task_models
+                if task.id not in assigned_by_baseline
+            ]
+            opt_key = base_key
+
+        # Distance and staff comparisons are meaningful only for equal coverage by category.
+        coverage_equal = {stop.task_id for route in base_routes for stop in route.stops} == {
+            stop.task_id for route in opt_routes for stop in route.stops
+        }
+        if coverage_equal and base_metrics.total_mileage_km > 0:
             delta = base_metrics.total_mileage_km - opt_metrics.total_mileage_km
             opt_metrics.mileage_reduction_pct = round((delta / base_metrics.total_mileage_km) * 100, 1)
 
-        if base_metrics.total_engineers_used > 0:
+        if coverage_equal and base_metrics.total_engineers_used > 0:
             delta = base_metrics.total_engineers_used - opt_metrics.total_engineers_used
             opt_metrics.engineers_reduction_pct = round((delta / base_metrics.total_engineers_used) * 100, 1)
 

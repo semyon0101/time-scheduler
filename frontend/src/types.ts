@@ -8,6 +8,8 @@ export interface Engineer {
   skills: string[];
   transport_type: string;
   status?: string; // "active" | "unavailable" | "new"
+  area_id?: string;
+  is_on_duty?: boolean;
 }
 
 export interface Task {
@@ -22,6 +24,9 @@ export interface Task {
   required_skill: string;
   required_transport?: string | null;
   priority: string;
+  category?: 'emergency' | 'connection' | 'repair' | 'add_on' | 'other';
+  area_id?: string;
+  created_at?: string | null;
   status?: string; // "active" | "cancelled" | "new"
   control_assigned_engineer?: string | null;
 }
@@ -73,6 +78,15 @@ export interface Metrics {
   unassigned_count: number;
   mileage_reduction_pct?: number | null;
   engineers_reduction_pct?: number | null;
+  unassigned_emergencies?: number;
+  unassigned_connections?: number;
+  late_emergencies?: number;
+  emergency_excess_min?: number;
+  emergency_response_min?: number;
+  measured_emergencies?: number;
+  target_met_emergencies?: number;
+  reassigned_tasks?: number;
+  shifted_start_min?: number;
 }
 
 export interface StateResponse {

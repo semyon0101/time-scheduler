@@ -59,6 +59,18 @@ SYNTHETIC_FILES = (
     "Югоцентр Синтетические данные.csv",
 )
 
+PRESET_CSV = {
+    "vostok": "Восток Синтетические данные.csv",
+    "yugocentr": "Югоцентр Синтетические данные.csv",
+    "yugovostok": "Юго-восток Синтетические данные.csv",
+}
+BK_CATEGORY = {
+    "Глобальная проблема": "emergency",
+    "Подключение": "connection",
+    "Локальная заявка": "repair",
+    "Дозаказ": "add_on",
+}
+
 _cache: dict | None = None
 
 
@@ -92,6 +104,33 @@ def _parse_window(raw: str) -> tuple[int, int]:
 def read_rows(path: Path) -> list[dict[str, str]]:
     text = path.read_bytes().decode("cp1251")
     return list(csv.DictReader(text.splitlines(), delimiter=";"))
+
+
+def enrich_preset_data(data: dict, area_id: str) -> dict:
+    """Restore the actual business category from source CSV; never infer it from skills."""
+    source = PRESET_CSV.get(area_id)
+    categories = {}
+    if source:
+        categories = {
+            row["Заявка"].strip(): BK_CATEGORY[row["Тип заявки BK"].strip()]
+            for row in read_rows(DATA_DIR / source)
+            if row.get("Заявка", "").strip().isdigit() and row.get("Тип заявки BK", "").strip() in BK_CATEGORY
+        }
+    return {
+        **data,
+        "engineers": [
+            {**engineer, "area_id": engineer.get("area_id", area_id), "is_on_duty": engineer.get("is_on_duty", True)}
+            for engineer in data.get("engineers", [])
+        ],
+        "tasks": [
+            {
+                **task,
+                "area_id": task.get("area_id", area_id),
+                "category": task.get("category", categories.get(task["id"], "other")),
+            }
+            for task in data.get("tasks", [])
+        ],
+    }
 
 
 def office_position(rows: list[dict[str, str]]) -> Position | None:
@@ -143,6 +182,7 @@ def tasks_from_rows(rows: list[dict[str, str]]) -> list[TaskRequest]:
                 required_skill=Skill(skill=skill),
                 required_transport=None,
                 priority=Priority(priority=priority),
+                category=BK_CATEGORY.get(bk, "other"),
             )
         )
     return tasks

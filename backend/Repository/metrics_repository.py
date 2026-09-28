@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from backend.Entities.metrics import PlanMetricsRecord
+from backend.Models.optimization import QUALITY_METRIC_FIELDS
 
 
 class MetricsRepository:
@@ -22,6 +23,8 @@ class MetricsRepository:
             existing.mileage_reduction_pct = metrics.mileage_reduction_pct
             existing.engineers_reduction_pct = metrics.engineers_reduction_pct
             existing.unassigned_json = metrics.unassigned_json
+            for field in QUALITY_METRIC_FIELDS:
+                setattr(existing, field, getattr(metrics, field) or 0)
             self.db.commit()
             self.db.refresh(existing)
             return existing

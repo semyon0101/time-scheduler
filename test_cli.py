@@ -29,6 +29,7 @@ try:
     from backend.Models.optimization import EngineerModel, TaskModel
     from backend.Services.explanation import generate_explanation
     from backend.Services.routing.baseline import solve_baseline
+    from backend.Services.routing.dataset import enrich_preset_data
     from backend.Services.routing.optimizer import solve_vrptw
 except ImportError as e:
     print(f"[ERROR] Failed to import algorithm modules: {e}")
@@ -69,13 +70,10 @@ def load_dataset(file_path: str) -> Dict[str, Any]:
 def diagnose_unassigned_task(task: TaskModel, engineers: List[EngineerModel]) -> List[str]:
     """Diagnoses why a task could not be assigned."""
     tags = []
-    if task.priority == "Срочная":
-        tags.append("urgent")
-    else:
-        tags.append("normal")
+    tags.append(task.category)
 
     # Check skills
-    has_skill = any(task.required_skill in e.skills for e in engineers)
+    has_skill = any(task.required_skill in e.skills and e.area_id == task.area_id and e.is_on_duty for e in engineers)
     if not has_skill:
         tags.append("skills_mismatch")
 
@@ -135,6 +133,8 @@ def run_cli():
             sys.exit(1)
 
     raw_data = load_dataset(data_path)
+    if not args.file:
+        raw_data = enrich_preset_data(raw_data, PRESET_ALIASES.get(args.preset.lower(), args.preset.lower()))
     raw_engineers = raw_data.get("engineers", [])
     raw_tasks = raw_data.get("tasks", [])
 
@@ -147,19 +147,21 @@ def run_cli():
     opt_routes, opt_metrics, opt_unassigned = solve_vrptw(engineers, tasks)
 
     # 3. Calculate improvements
-    mileage_saved_km = round(base_metrics.total_mileage_km - opt_metrics.total_mileage_km, 2)
-    mileage_saved_pct = (
-        round((mileage_saved_km / base_metrics.total_mileage_km * 100), 1) if base_metrics.total_mileage_km > 0 else 0.0
-    )
-    eng_saved_cnt = base_metrics.total_engineers_used - opt_metrics.total_engineers_used
-    eng_saved_pct = (
-        round((eng_saved_cnt / base_metrics.total_engineers_used * 100), 1)
-        if base_metrics.total_engineers_used > 0
-        else 0.0
-    )
-
-    opt_metrics.mileage_reduction_pct = mileage_saved_pct
-    opt_metrics.engineers_reduction_pct = eng_saved_pct
+    base_ids = {stop.task_id for route in base_routes for stop in route.stops}
+    opt_ids = {stop.task_id for route in opt_routes for stop in route.stops}
+    coverage_equal = base_ids == opt_ids
+    if coverage_equal:
+        if base_metrics.total_mileage_km > 0:
+            opt_metrics.mileage_reduction_pct = round(
+                (base_metrics.total_mileage_km - opt_metrics.total_mileage_km) / base_metrics.total_mileage_km * 100, 1
+            )
+        if base_metrics.total_engineers_used > 0:
+            opt_metrics.engineers_reduction_pct = round(
+                (base_metrics.total_engineers_used - opt_metrics.total_engineers_used)
+                / base_metrics.total_engineers_used
+                * 100,
+                1,
+            )
 
     # Lookup helpers
     eng_by_id = {e.id: e for e in engineers}
@@ -206,11 +208,19 @@ def run_cli():
     opt_travel_min = sum(r.total_travel_min for r in opt_routes)
 
     print(
-        f"  {'Задействовано инженеров':<32} | {base_metrics.total_engineers_used:<18} | {opt_metrics.total_engineers_used:<18} (экономия -{eng_saved_cnt} / -{eng_saved_pct}%)"
+        f"  {'Задействовано инженеров':<32} | {base_metrics.total_engineers_used:<18} | {opt_metrics.total_engineers_used:<18}"
     )
     print(
-        f"  {'Суммарный пробег (км)':<32} | {base_metrics.total_mileage_km:<18.1f} | {opt_metrics.total_mileage_km:<18.1f} (экономия -{mileage_saved_km:.1f} км / -{mileage_saved_pct}%)"
+        f"  {'Суммарный пробег (км)':<32} | {base_metrics.total_mileage_km:<18.1f} | {opt_metrics.total_mileage_km:<18.1f}"
     )
+    print(
+        f"  {'Не назначено аварий':<32} | {base_metrics.unassigned_emergencies:<18} | {opt_metrics.unassigned_emergencies:<18}"
+    )
+    print(
+        f"  {'Не назначено подключений':<32} | {base_metrics.unassigned_connections:<18} | {opt_metrics.unassigned_connections:<18}"
+    )
+    if not coverage_equal:
+        print("  Проценты экономии не рассчитываются: планы обслужили разный набор заявок.")
     print(f"  {'Время в пути (мин)':<32} | {base_travel_min:<18} | {opt_travel_min:<18}")
     print(
         f"  {'Назначено заявок':<32} | {base_metrics.assigned_tasks_count:<18} | {opt_metrics.assigned_tasks_count:<18} ({round(opt_metrics.assigned_tasks_count / len(tasks) * 100, 1)}% от общего)"

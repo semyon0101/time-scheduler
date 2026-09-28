@@ -51,6 +51,15 @@ class MetricsOut(BaseModel):
     unassigned_count: int
     mileage_reduction_pct: float | None = None
     engineers_reduction_pct: float | None = None
+    unassigned_emergencies: int = 0
+    unassigned_connections: int = 0
+    late_emergencies: int = 0
+    emergency_excess_min: int = 0
+    emergency_response_min: int = 0
+    measured_emergencies: int = 0
+    target_met_emergencies: int = 0
+    reassigned_tasks: int = 0
+    shifted_start_min: int = 0
 
 
 class StateResponse(BaseModel):

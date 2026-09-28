@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import numpy as np
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
 
 from backend.Models.VRPTW.request import EngineerRequest, Request, TaskRequest
-from backend.Models.VRPTW.request_types import PriorityEnum, TransportTypeEnum
+from backend.Models.VRPTW.request_types import TransportTypeEnum
 from backend.Models.VRPTW.response import EngineerRouteResponse, StopResponse, UnassignedTask
-from backend.Services.routing.geo import calc_travel_min, haversine_km
+from backend.Services.routing.geo import calc_travel_min, road_distance_km
+from backend.Services.routing.policy import MOSCOW, available_at, eligible_fields
 
 DISTANCE_SCALE = 1000  # метры в целочисленной стоимости
-DROP_PENALTY_NORMAL = 10_000_000
-DROP_PENALTY_URGENT = 50_000_000
 SEARCH_SECONDS = 2
 
 
@@ -21,7 +22,11 @@ def _hhmm(absolute: int) -> str:
     return f"{h:02d}:{m:02d}"
 
 
-def _ineligible_reason(engineer: EngineerRequest, task: TaskRequest) -> str | None:
+def _ineligible_reason(engineer: EngineerRequest, task: TaskRequest, planning_date) -> str | None:
+    if not engineer.is_on_duty or engineer.status.status == "unavailable":
+        return "инженер не дежурит или недоступен"
+    if engineer.area_id != task.area_id:
+        return "заявка принадлежит другому участку"
     skill_ok = any(s.skill == task.required_skill.skill for s in engineer.skills)
     if not skill_ok:
         return "отсутствует необходимый навык"
@@ -30,13 +35,28 @@ def _ineligible_reason(engineer: EngineerRequest, task: TaskRequest) -> str | No
         and task.required_transport.transport_type != engineer.transport_type.transport_type
     ):
         return "нет исполнителя с требуемым типом транспорта"
+    if not eligible_fields(
+        engineer_area=engineer.area_id,
+        is_on_duty=engineer.is_on_duty,
+        status=engineer.status.status,
+        skills=[s.skill for s in engineer.skills],
+        transport=engineer.transport_type.transport_type,
+        task_area=task.area_id,
+        required_skill=task.required_skill.skill,
+        required_transport=task.required_transport.transport_type if task.required_transport else None,
+    ):
+        return "инженер не подходит по обязательным ограничениям"
     if task.window_end.absolute_time - task.duration.absolute_time < task.window_start.absolute_time:
         return "работа не помещается во временное окно заявки"
     latest_start = min(
         engineer.shift_end.absolute_time - task.duration.absolute_time,
         task.window_end.absolute_time - task.duration.absolute_time,
     )
-    if latest_start < max(engineer.shift_start.absolute_time, task.window_start.absolute_time):
+    if latest_start < max(
+        engineer.shift_start.absolute_time,
+        task.window_start.absolute_time,
+        available_at(task.created_at, planning_date),
+    ):
         return "работа не помещается во временное окно/смену"
     return None
 
@@ -49,7 +69,7 @@ def _matrices(
     dist_km = np.zeros((size, size), dtype=np.float64)
     for i in range(size):
         for j in range(i + 1, size):
-            distance = haversine_km(lats[i], lons[i], lats[j], lons[j])
+            distance = road_distance_km(lats[i], lons[i], lats[j], lons[j])
             dist_km[i, j] = dist_km[j, i] = distance
     # открытый маршрут: возврат на склад не стоит времени и километров
     dist_km[:, 0] = 0.0
@@ -63,12 +83,13 @@ def _matrices(
 
 def solve_engineer_route(request: Request) -> EngineerRouteResponse:
     engineer = request.engineers
+    planning_date = request.planning_date or datetime.now(MOSCOW).date()
     tasks = list(request.tasks)
     unassigned: list[UnassignedTask] = []
 
     eligible: list[TaskRequest] = []
     for task in tasks:
-        reason = _ineligible_reason(engineer, task)
+        reason = _ineligible_reason(engineer, task, planning_date)
         if reason is not None:
             unassigned.append(UnassignedTask(task_id=task.id, reason=reason))
         else:
@@ -109,7 +130,7 @@ def solve_engineer_route(request: Request) -> EngineerRouteResponse:
     tw_start[0] = shift_start
     tw_end[0] = horizon
     for i, t in enumerate(eligible, start=1):
-        tw_start[i] = t.window_start.absolute_time
+        tw_start[i] = max(t.window_start.absolute_time, available_at(t.created_at, planning_date))
         tw_end[i] = t.window_end.absolute_time - t.duration.absolute_time
 
     manager = pywrapcp.RoutingIndexManager(n + 1, 1, 0)
@@ -130,9 +151,19 @@ def solve_engineer_route(request: Request) -> EngineerRouteResponse:
     time_dim.CumulVar(routing.Start(0)).SetRange(int(shift_start), int(shift_start))
     time_dim.CumulVar(routing.End(0)).SetRange(0, int(horizon))
 
+    # The upper category always outweighs dropping all lower-category jobs and any travel.
+    normal_penalty = (n + 1) * int(dist_m.max()) + 1
+    connection_penalty = normal_penalty * (n + 1)
+    emergency_penalty = connection_penalty * (n + 1)
     for node in range(1, n + 1):
         task = eligible[node - 1]
-        penalty = DROP_PENALTY_URGENT if task.priority.priority == PriorityEnum.URGENT else DROP_PENALTY_NORMAL
+        penalty = (
+            emergency_penalty
+            if task.category == "emergency"
+            else connection_penalty
+            if task.category == "connection"
+            else normal_penalty
+        )
         routing.AddDisjunction([manager.NodeToIndex(node)], penalty)
 
     params = pywrapcp.DefaultRoutingSearchParameters()

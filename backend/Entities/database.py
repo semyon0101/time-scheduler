@@ -26,3 +26,6 @@ def get_db():
 def create_tables(bind_engine=None):
     target_engine = bind_engine or engine
     Base.metadata.create_all(bind=target_engine)
+    from backend.Repository.schema_migrations import migrate_planning_fields
+
+    migrate_planning_fields(target_engine)

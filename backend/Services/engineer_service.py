@@ -41,6 +41,7 @@ class EngineerService:
 
     def create_engineer(self, dispatcher_id: str, data: EngineerCreate) -> EngineerOut:
         eng_id = data.id or f"eng_{uuid.uuid4().hex[:6]}"
+        dispatcher = self.session_service.dispatcher_repo.get_by_id(dispatcher_id)
         new_eng = Engineer(
             id=eng_id,
             dispatcher_id=dispatcher_id,
@@ -51,6 +52,8 @@ class EngineerService:
             shift_end=data.shift_end,
             skills_json=json.dumps(data.skills, ensure_ascii=False),
             transport_type=data.transport_type,
+            area_id=data.area_id or dispatcher.active_preset,
+            is_on_duty=data.is_on_duty,
             status="new",
         )
         created = self.engineer_repo.create(new_eng)
@@ -63,6 +66,8 @@ class EngineerService:
             shift_end=created.shift_end,
             skills=created.skills,
             transport_type=created.transport_type,
+            area_id=created.area_id,
+            is_on_duty=created.is_on_duty,
             status=created.status,
         )
 

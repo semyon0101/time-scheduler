@@ -9,7 +9,7 @@ from backend.Entities.explanation import ExplanationCache
 from backend.Entities.metrics import PlanMetricsRecord
 from backend.Entities.schedule import ScheduleRecord
 from backend.Entities.task import Task
-from backend.Models.optimization import PlanMetrics, UnassignedTask
+from backend.Models.optimization import QUALITY_METRIC_FIELDS, PlanMetrics, UnassignedTask
 
 
 class ReplanRepository:
@@ -59,6 +59,8 @@ class ReplanRepository:
             rec.unassigned_json = json.dumps([item.model_dump() for item in unassigned], ensure_ascii=False)
             rec.mileage_reduction_pct = metrics.mileage_reduction_pct
             rec.engineers_reduction_pct = metrics.engineers_reduction_pct
+            for field in QUALITY_METRIC_FIELDS:
+                setattr(rec, field, getattr(metrics, field))
             self.db.commit()
         except Exception:
             self.db.rollback()

@@ -49,12 +49,15 @@ def test_engineer_endpoints(client: TestClient):
         "start_lat": 55.75,
         "start_lon": 37.61,
         "skills": ["Тест"],
+        "is_on_duty": False,
     }
     r_create = client.post("/api/v1/engineers", json=eng_payload, headers=headers)
     assert r_create.status_code == 200
     eng_data = r_create.json()
     eng_id = eng_data["id"]
     assert eng_data["status"] == "new"
+    assert eng_data["area_id"] == "vostok"
+    assert eng_data["is_on_duty"] is False
 
     # 2. Explanation
     r_exp = client.get(f"/api/v1/engineers/{eng_id}/explanation", headers=headers)
@@ -86,12 +89,16 @@ def test_task_endpoints(client: TestClient):
         "lat": 55.76,
         "lon": 37.60,
         "priority": "Срочная",
+        "category": "emergency",
     }
     r_create = client.post("/api/v1/tasks", json=task_payload, headers=headers)
     assert r_create.status_code == 200
     task_data = r_create.json()
     task_id = task_data["id"]
     assert task_data["status"] == "new"
+    assert task_data["category"] == "emergency"
+    assert task_data["area_id"] == "vostok"
+    assert task_data["created_at"] is not None
 
     # 2. Explanation
     r_exp = client.get(f"/api/v1/tasks/{task_id}/explanation", headers=headers)
