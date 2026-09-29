@@ -15,7 +15,7 @@ from backend.Models.optimization import (
 )
 from backend.Services.routing.feasibility import evaluate_route_feasibility
 from backend.Services.routing.geo import time_to_minutes
-from backend.Services.routing.policy import MOSCOW, assess_plan, received_datetime
+from backend.Services.routing.policy import MOSCOW, assess_plan, received_datetime, validate_plan
 
 
 def _event_minutes(timestamp: str | None) -> int:
@@ -288,6 +288,12 @@ def apply_batch_replanning(
             diff["notes"].append(f"Нет свободного интервала для заявки {task.id} без изменения расписания")
 
     result_routes = [route.result(now) for route in routes.values()]
+    validate_plan(
+        result_routes,
+        engineers,
+        [task for task in task_by_id.values() if task.id not in cancelled],
+        planning_date=planning_date,
+    )
     assignees = {stop.task_id: route.engineer_id for route in result_routes for stop in route.stops}
     diff["reassigned_tasks"] = [
         {"task_id": task_id, "assigned_to": engineer_id}

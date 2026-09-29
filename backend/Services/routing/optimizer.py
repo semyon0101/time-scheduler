@@ -1,5 +1,6 @@
 """Build one day route per engineer and improve the whole assignment lexicographically."""
 
+import os
 from dataclasses import dataclass
 from datetime import date, datetime
 
@@ -22,9 +23,12 @@ from backend.Models.VRPTW.request_types import (
     TransportType,
 )
 from backend.Services.routing.feasibility import diagnose_unassigned_reason, evaluate_route_feasibility
-from backend.Services.routing.policy import MOSCOW, assess_plan, eligible_for
+from backend.Services.routing.geo import time_to_minutes
+from backend.Services.routing.policy import MOSCOW, assess_plan, eligible_for, validate_plan
 from backend.Services.routing.solver import solve_engineer_route
 
+# Общий бюджет поиска OR-Tools на весь день; делится между инженерами.
+SEARCH_TOTAL_MS = int(os.getenv("VRPTW_TOTAL_SEARCH_MS", "3000"))
 MAX_NEIGHBORS = 4000
 MAX_IMPROVEMENTS = 8
 MAX_SIMPLE_NEIGHBORS = 800
@@ -292,14 +296,61 @@ def _improve_assignments(
     return routes
 
 
-def solve_vrptw(
-    engineers: list[EngineerModel],
-    tasks: list[TaskModel],
-    *,
-    planning_date: date | None = None,
-) -> tuple[list[EngineerRoute], PlanMetrics, list[UnassignedTask]]:
-    """Always call the single-engineer OR-Tools solver for each engineer on the remaining pool."""
-    planning_date = planning_date or datetime.now(MOSCOW).date()
+CATEGORY_RANK = {"emergency": 0, "connection": 1, "repair": 2, "add_on": 3, "other": 4}
+
+
+def _greedy_seed(engineers: list[EngineerModel], tasks: list[TaskModel], planning_date: date) -> list[EngineerRoute]:
+    """Constructive candidate: category/age/window order, minimal added mileage insertion."""
+    sequences: dict[str, list[TaskModel]] = {engineer.id: [] for engineer in engineers}
+    mileage: dict[str, float] = {engineer.id: 0.0 for engineer in engineers}
+    order = sorted(
+        tasks,
+        key=lambda task: (
+            CATEGORY_RANK.get(task.category, 4),
+            task.created_at.isoformat() if task.created_at else "",
+            time_to_minutes(task.window_end),
+            task.id,
+        ),
+    )
+    for task in order:
+        best: tuple | None = None
+        for engineer in engineers:
+            if not eligible_for(engineer, task):
+                continue
+            sequence = sequences[engineer.id]
+            for position in range(len(sequence) + 1):
+                candidate = sequence[:position] + [task] + sequence[position:]
+                feasible, _, km, _, _ = evaluate_route_feasibility(engineer, candidate, planning_date=planning_date)
+                if not feasible:
+                    continue
+                score = (km - mileage[engineer.id], km, position)
+                if best is None or score < best[0]:
+                    best = (score, engineer.id, candidate, km)
+        if best is None:
+            continue
+        _, engineer_id, sequence, km = best
+        sequences[engineer_id] = sequence
+        mileage[engineer_id] = km
+    routes = []
+    for engineer in engineers:
+        sequence = sequences[engineer.id]
+        feasible, stops, km, work, travel = evaluate_route_feasibility(engineer, sequence, planning_date=planning_date)
+        routes.append(
+            _new_route(
+                engineer,
+                stops if feasible else [],
+                km if feasible else 0.0,
+                work if feasible else 0,
+                travel if feasible else 0,
+            )
+        )
+    return routes
+
+
+def _solve_sequential(
+    engineers: list[EngineerModel], tasks: list[TaskModel], planning_date: date, search_ms: int
+) -> list[EngineerRoute]:
+    """Call the single-engineer OR-Tools solver for each engineer on the remaining pool."""
     remaining = {task.id: task for task in tasks}
     routes: dict[str, EngineerRoute] = {}
 
@@ -342,7 +393,7 @@ def solve_vrptw(
                 for task in remaining.values()
             ],
         )
-        result = solve_engineer_route(request)
+        result = solve_engineer_route(request, search_ms=search_ms)
         stops: list[ScheduleStop] = []
         work = 0
         for order, stop in enumerate(result.stops, start=1):
@@ -368,9 +419,25 @@ def solve_vrptw(
         routes[engineer.id] = _new_route(
             engineer, stops, result.total_distance_km, work, sum(stop.travel_min for stop in stops)
         )
+    return [routes[engineer.id] for engineer in engineers]
 
-    result_routes = [routes[engineer.id] for engineer in engineers]
+
+def solve_vrptw(
+    engineers: list[EngineerModel],
+    tasks: list[TaskModel],
+    *,
+    planning_date: date | None = None,
+) -> tuple[list[EngineerRoute], PlanMetrics, list[UnassignedTask]]:
+    """Build two candidates (OR-Tools and greedy insertion), keep the better one, then improve it."""
+    planning_date = planning_date or datetime.now(MOSCOW).date()
+    search_ms = max(100, SEARCH_TOTAL_MS // max(1, len(engineers)))
+    ortools_routes = _solve_sequential(engineers, tasks, planning_date, search_ms)
+    greedy_routes = _greedy_seed(engineers, tasks, planning_date)
+    _, ortools_key = assess_plan(ortools_routes, tasks, planning_date=planning_date)
+    _, greedy_key = assess_plan(greedy_routes, tasks, planning_date=planning_date)
+    result_routes = greedy_routes if greedy_key < ortools_key else ortools_routes
     result_routes = _improve_assignments(result_routes, engineers, tasks, planning_date)
+    validate_plan(result_routes, engineers, tasks, planning_date=planning_date)
     metrics, _ = assess_plan(result_routes, tasks, planning_date=planning_date)
     assigned = {stop.task_id for route in result_routes for stop in route.stops}
     unassigned = [

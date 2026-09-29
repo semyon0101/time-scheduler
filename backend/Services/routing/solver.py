@@ -14,7 +14,7 @@ from backend.Services.routing.geo import calc_travel_min, road_distance_km
 from backend.Services.routing.policy import MOSCOW, available_at, eligible_fields
 
 DISTANCE_SCALE = 1000  # метры в целочисленной стоимости
-SEARCH_SECONDS = 2
+DEFAULT_SEARCH_MS = 250  # лимит поиска, если вызывающий код не задал свой
 
 
 def _hhmm(absolute: int) -> str:
@@ -81,7 +81,7 @@ def _matrices(
     return dist_km, dist_m, travel
 
 
-def solve_engineer_route(request: Request) -> EngineerRouteResponse:
+def solve_engineer_route(request: Request, *, search_ms: int | None = None) -> EngineerRouteResponse:
     engineer = request.engineers
     planning_date = request.planning_date or datetime.now(MOSCOW).date()
     tasks = list(request.tasks)
@@ -119,9 +119,10 @@ def solve_engineer_route(request: Request) -> EngineerRouteResponse:
     for i, t in enumerate(eligible, start=1):
         durations[i] = t.duration.absolute_time
 
-    # transit времени = travel(i->j) + service(i); дуга на склад уже 0
+    # transit времени = travel(i->j) + service(i); доезд на склад бесплатен,
+    # но длительность последней работы должна учитываться в конце смены
     time_matrix = travel_min + durations[:, None]
-    time_matrix[:, 0] = 0
+    time_matrix[:, 0] = durations
 
     tw_start = np.empty(n + 1, dtype=np.int64)
     tw_end = np.empty(n + 1, dtype=np.int64)
@@ -171,7 +172,7 @@ def solve_engineer_route(request: Request) -> EngineerRouteResponse:
     _ls = routing_enums_pb2.LocalSearchMetaheuristic
     params.first_solution_strategy = getattr(_fs, "PATH_" + "CHEAPEST_" + "ARC")
     params.local_search_metaheuristic = getattr(_ls, "GUIDED_" + "LOCAL_" + "SEARCH")
-    params.time_limit.FromSeconds(SEARCH_SECONDS)
+    params.time_limit.FromMilliseconds(search_ms if search_ms is not None else DEFAULT_SEARCH_MS)
     # меньше логирования и параллельный поиск
     params.log_search = False
 

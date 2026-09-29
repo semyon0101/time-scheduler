@@ -1,4 +1,5 @@
 import math
+from functools import lru_cache
 
 # Shared travel model for FIFO, replanning and the OR-Tools solver.
 SPEEDS_KMH = {"Автомобиль": 40.0, "Общественный транспорт": 20.0, "Велосипед": 15.0, "Пешеход": 5.0}
@@ -15,9 +16,18 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return r * c
 
 
-def road_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Approximate Moscow road-network distance from straight-line distance."""
+@lru_cache(maxsize=200_000)
+def _road_distance_cached(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return haversine_km(lat1, lon1, lat2, lon2) * MOSCOW_NETWORK_DETOUR_FACTOR
+
+
+def road_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Approximate Moscow road-network distance from straight-line distance.
+
+    Coordinates repeat across engineers and improvement iterations, so results
+    are memoized after rounding to ~0.1 m.
+    """
+    return _road_distance_cached(round(lat1, 6), round(lon1, 6), round(lat2, 6), round(lon2, 6))
 
 
 def calc_travel_min(distance_km: float, transport_type: str) -> int:

@@ -5,7 +5,7 @@ from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 from backend.Models.optimization import EngineerModel, EngineerRoute, PlanMetrics, TaskModel
-from backend.Services.routing.geo import time_to_minutes
+from backend.Services.routing.geo import calc_travel_min, road_distance_km, time_to_minutes
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 RESPONSE_TARGET_MIN = int(os.getenv("RESPONSE_TARGET_MIN", "60"))  # monitoring only
@@ -62,6 +62,76 @@ def available_at(created_at: datetime | None, planning_date: date) -> int:
 
 def available_minute(task: TaskModel, planning_date: date) -> int:
     return available_at(task.created_at, planning_date)
+
+
+def validate_plan(
+    routes: list[EngineerRoute],
+    engineers: list[EngineerModel],
+    tasks: list[TaskModel],
+    *,
+    planning_date: date | None = None,
+) -> None:
+    """Re-derive every stop from hard constraints and raise on any violation.
+
+    This is the independent safety net before a plan is shown to the dispatcher:
+    unlike assess_plan it also checks time windows, durations, shift bounds and
+    travel feasibility, not only duplicates and intake timestamps. Duty/status
+    are intentionally not checked: committed work continues after an engineer
+    goes off duty.
+    """
+    planning_date = planning_date or datetime.now(MOSCOW).date()
+    by_engineer = {engineer.id: engineer for engineer in engineers}
+    by_task = {task.id: task for task in tasks}
+    seen: dict[str, str] = {}
+    problems: list[str] = []
+    for route in routes:
+        engineer = by_engineer.get(route.engineer_id)
+        if engineer is None:
+            problems.append(f"неизвестный инженер {route.engineer_id}")
+            continue
+        shift_start = time_to_minutes(engineer.shift_start)
+        shift_end = time_to_minutes(engineer.shift_end)
+        clock = shift_start
+        lat, lon = engineer.start_lat, engineer.start_lon
+        for position, stop in enumerate(route.stops, start=1):
+            task = by_task.get(stop.task_id)
+            if task is None:
+                problems.append(f"неизвестная заявка {stop.task_id} у {route.engineer_id}")
+                continue
+            if stop.task_id in seen:
+                problems.append(f"заявка {stop.task_id} назначена дважды: {seen[stop.task_id]} и {route.engineer_id}")
+            seen[stop.task_id] = route.engineer_id
+            if stop.order != position:
+                problems.append(f"заявка {stop.task_id}: порядок {stop.order} != {position}")
+            if engineer.area_id != task.area_id:
+                problems.append(f"заявка {stop.task_id}: участок {task.area_id} != {engineer.area_id}")
+            if task.required_skill not in engineer.skills:
+                problems.append(f"заявка {stop.task_id}: нет навыка «{task.required_skill}» у {route.engineer_id}")
+            if task.required_transport and task.required_transport != engineer.transport_type:
+                problems.append(
+                    f"заявка {stop.task_id}: транспорт {engineer.transport_type} != {task.required_transport}"
+                )
+            start = time_to_minutes(stop.start_time)
+            end = time_to_minutes(stop.end_time)
+            travel = calc_travel_min(road_distance_km(lat, lon, stop.lat, stop.lon), engineer.transport_type)
+            if start < clock + travel:
+                problems.append(f"заявка {stop.task_id}: начало {stop.start_time} раньше доезда/предыдущей работы")
+            if start < time_to_minutes(task.window_start):
+                problems.append(f"заявка {stop.task_id}: начало {stop.start_time} раньше окна {task.window_start}")
+            if end > time_to_minutes(task.window_end):
+                problems.append(f"заявка {stop.task_id}: конец {stop.end_time} позже окна {task.window_end}")
+            if end - start != task.duration_min:
+                problems.append(f"заявка {stop.task_id}: длительность {end - start} != {task.duration_min}")
+            if start < shift_start or end > shift_end:
+                problems.append(
+                    f"заявка {stop.task_id}: {stop.start_time}–{stop.end_time} вне смены {engineer.shift_start}–{engineer.shift_end}"
+                )
+            if start < available_minute(task, planning_date):
+                problems.append(f"заявка {stop.task_id}: обслужена до поступления")
+            clock = end
+            lat, lon = stop.lat, stop.lon
+    if problems:
+        raise ValueError("Недопустимый план: " + "; ".join(problems[:20]))
 
 
 def assess_plan(

@@ -3,9 +3,13 @@
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from backend.Models.optimization import EngineerModel, TaskModel
+import pytest
+
+from backend.Models.optimization import EngineerModel, EngineerRoute, ScheduleStop, TaskModel
+from backend.Services.routing import optimizer
 from backend.Services.routing.baseline import solve_baseline
 from backend.Services.routing.optimizer import solve_vrptw
+from backend.Services.routing.policy import assess_plan, validate_plan
 
 DAY = date(2026, 9, 28)
 MOSCOW = ZoneInfo("Europe/Moscow")
@@ -122,3 +126,55 @@ def test_older_emergency_is_not_starved_when_only_one_fits():
     assert [stop.task_id for stop in routes[0].stops] == [older.id]
     assert [task.task_id for task in unassigned] == [newer.id]
     assert metrics.unassigned_emergencies == 1
+
+
+def test_validate_plan_rejects_shift_overrun():
+    engineer = _engineer("eng")
+    task = _task("late", window_start="21:30", window_end="23:00", duration_min=60)
+    stop = ScheduleStop(
+        task_id=task.id,
+        address=task.address,
+        district="",
+        lat=task.lat,
+        lon=task.lon,
+        order=1,
+        arrival_time="21:30",
+        start_time="21:30",
+        end_time="22:30",
+        travel_km=0.0,
+        travel_min=0,
+        required_skill=task.required_skill,
+        priority=task.priority,
+    )
+    route = EngineerRoute(
+        engineer_id=engineer.id,
+        engineer_name=engineer.name,
+        transport_type=engineer.transport_type,
+        skills=engineer.skills,
+        start_lat=engineer.start_lat,
+        start_lon=engineer.start_lon,
+        shift_start=engineer.shift_start,
+        shift_end=engineer.shift_end,
+        stops=[stop],
+    )
+    with pytest.raises(ValueError, match="вне смены"):
+        validate_plan([route], [engineer], [task], planning_date=DAY)
+
+
+def test_validate_plan_accepts_generated_plan():
+    engineer = _engineer("eng")
+    task = _task("visit")
+    routes, _, _ = solve_vrptw([engineer], [task], planning_date=DAY)
+    validate_plan(routes, [engineer], [task], planning_date=DAY)
+
+
+def test_optimizer_is_not_worse_than_greedy_seed():
+    engineers = [_engineer("a"), _engineer("b")]
+    tasks = [_task(f"t{i}", window_start="09:00", window_end="18:00", duration_min=60) for i in range(6)]
+
+    routes, _, _ = solve_vrptw(engineers, tasks, planning_date=DAY)
+    _, key = assess_plan(routes, tasks, planning_date=DAY)
+    greedy = optimizer._greedy_seed(engineers, tasks, DAY)
+    _, greedy_key = assess_plan(greedy, tasks, planning_date=DAY)
+
+    assert key <= greedy_key

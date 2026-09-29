@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -9,12 +10,65 @@ import pytest
 from backend.Entities.engineer import Engineer
 from backend.Entities.task import Task
 from backend.Models.optimization import EngineerModel, TaskModel
+from backend.Models.VRPTW.request import EngineerRequest, Request, TaskRequest
+from backend.Models.VRPTW.request_types import (
+    EngineerStatus,
+    EngineerStatusEnum,
+    Position,
+    Priority,
+    PriorityEnum,
+    Skill,
+    SkillEnum,
+    Time,
+    TransportType,
+    TransportTypeEnum,
+)
 from backend.Services.algorithm_client import AlgorithmClient
 from backend.Services.routing import optimizer
 from backend.Services.routing.baseline import solve_baseline
 from backend.Services.routing.feasibility import evaluate_route_feasibility
 from backend.Services.routing.geo import MOSCOW_NETWORK_DETOUR_FACTOR, calc_travel_min, haversine_km
+from backend.Services.routing.solver import solve_engineer_route
 from test_cli import find_preset_file
+
+
+def _clock(hours: int, minutes: int) -> Time:
+    return Time(time=f"{hours:02d}:{minutes:02d}", hours=hours, minutes=minutes, absolute_time=hours * 60 + minutes)
+
+
+def test_last_job_never_runs_past_shift_end():
+    """Regression: the depot column of the time matrix must keep the last job's duration."""
+    engineer = EngineerRequest(
+        id="eng",
+        start_pos=Position(address="склад", lat=55.75, lon=37.61),
+        shift_start=_clock(9, 0),
+        shift_end=_clock(22, 0),
+        skills=[Skill(skill=SkillEnum.LOCKAL)],
+        transport_type=TransportType(transport_type=TransportTypeEnum.CAR),
+        status=EngineerStatus(status=EngineerStatusEnum.ACTIVE),
+    )
+    task = TaskRequest(
+        id="long",
+        pos=Position(address="клиент", lat=55.75, lon=37.61),
+        window_start=_clock(9, 0),
+        window_end=_clock(23, 0),
+        duration=Time(time="13:05", hours=13, minutes=5, absolute_time=785),
+        required_skill=Skill(skill=SkillEnum.LOCKAL),
+        required_transport=None,
+        priority=Priority(priority=PriorityEnum.NORMAL),
+    )
+    result = solve_engineer_route(Request(planning_date=date(2026, 9, 29), engineers=engineer, tasks=[task]))
+    assert result.assigned_count == 0
+
+    fitting = task.model_copy(
+        update={
+            "window_end": _clock(22, 0),
+            "duration": Time(time="13:00", hours=13, minutes=0, absolute_time=780),
+        }
+    )
+    result = solve_engineer_route(Request(planning_date=date(2026, 9, 29), engineers=engineer, tasks=[fitting]))
+    assert result.assigned_count == 1
+    assert result.stops[0].service_end == "22:00"
 
 
 def test_offline_cli_imports_without_database_settings(tmp_path):
@@ -45,9 +99,9 @@ async def test_optimization_calls_solver_for_each_engineer_and_assigns_once(monk
     calls = []
     original = optimizer.solve_engineer_route
 
-    def traced_solve(request):
+    def traced_solve(request, **kwargs):
         calls.append((request.engineers.id, {task.id for task in request.tasks}))
-        return original(request)
+        return original(request, **kwargs)
 
     monkeypatch.setattr(optimizer, "solve_engineer_route", traced_solve)
     engineers = [
